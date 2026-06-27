@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网页源码解析器</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 顶部工具栏 -->
+<header class="toolbar">
+  <div class="toolbar-left">
+    <span class="logo">网页解析器</span>
+  </div>
+  <div class="toolbar-center">
+    <input type="text" id="urlInput" class="url-input" placeholder="请输入网址..." value="">
+    <button id="btnGo" class="btn btn-primary" title="加载页面" style="min-width:80px">加载</button>
+    <button id="btnFetch" class="btn btn-accent hidden" title="解析当前页面源码" style="min-width:80px">解析</button>
+  </div>
+  <div class="toolbar-right">
+    <button id="btnPriceCompare" class="btn" style="min-width:90px;background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600" title="跨平台比价">💰 比价</button>
+    <button id="btnBatch" class="btn btn-accent" title="批量抓取" style="min-width:80px">批量抓取</button>
+    <button id="btnBatchLoadAll" class="btn hidden" title="全部加载" style="min-width:80px;background:var(--orange);border-color:var(--orange);color:#000;font-weight:600">全部加载</button>
+  </div>
+</header>
+
+<!-- 主体区域：左侧操作区 / 右侧浏览区 -->
+<div class="main-container">
+  <!-- 左侧: 解析结果 -->
+  <div class="panel panel-left" id="panelLeft">
+    <div class="panel-header">
+      <span>解析结果</span>
+      <div class="panel-actions">
+        <button id="btnSaveSource" class="btn btn-sm" title="保存源码">保存源码</button>
+      </div>
+    </div>
+    <div class="result-container">
+      <!-- 目录树 -->
+      <div class="tree-panel" id="treePanel">
+        <div class="tree-content" id="treeContent"></div>
+        <!-- 批量抓取标签列表 -->
+        <div class="batch-tags-panel hidden" id="batchTagsPanel">
+          <div class="batch-tags-resize" id="batchTagsResize"></div>
+          <div class="batch-tags-header">
+            <span class="batch-tags-title">批量任务</span>
+            <span id="batchTagsCount" class="batch-tags-count"></span>
+            <button id="btnBatchClearDone" class="btn btn-sm" style="height:22px;padding:0 6px;font-size:11px" title="清除已完成">清完成</button>
+            <button id="btnBatchContinue" class="btn btn-sm btn-accent hidden" style="height:22px;padding:0 6px;font-size:11px" title="继续批量">继续</button>
+          </div>
+          <div class="batch-tags-list" id="batchTagsList"></div>
+        </div>
+      </div>
+      <!-- 内容展示区 -->
+      <div class="content-panel" id="contentPanel">
+        <div class="content-header" id="contentHeader">
+          <span id="contentTitle">选择左侧条目查看详情</span>
+          <div id="contentActions" class="content-actions"></div>
+        </div>
+        <div class="content-body" id="contentBody">
+          <div class="content-empty" id="contentEmpty">
+            <div class="empty-icon">&#128269;</div>
+            <p>浏览网页后点击"解析"按钮</p>
+            <p class="empty-hint">左侧树中选择条目查看详情</p>
+          </div>
+          <!-- 源码展示容器 -->
+          <div id="editorContainer" class="editor-container hidden"></div>
+          <!-- 查询结果表格 -->
+          <div id="queryContainer" class="query-container hidden">
+            <div class="query-input-row">
+              <input type="text" id="queryInput" class="query-input" placeholder="输入查询表达式..." autocomplete="off" spellcheck="false" inputmode="search">
+              <button id="btnQuery" class="btn btn-accent">查询</button>
+            </div>
+            <div class="query-toolbar">
+              <input type="text" id="querySearch" class="tree-search-input" placeholder="搜索过滤结果..." autocomplete="off" spellcheck="false" inputmode="search">
+              <label class="checkbox-label"><input type="checkbox" id="queryCheckAll"> 全选</label>
+              <button id="btnExportQuery" class="btn btn-sm btn-accent">导出勾选</button>
+              <button id="btnToggleFilter" class="btn btn-sm" style="white-space:nowrap">筛选 ▾</button>
+              <button id="btnLoadPriceCompare" class="btn btn-sm" style="background:var(--accent);color:#fff;border-color:var(--accent);white-space:nowrap" title="加载比价搜索结果">💰 比价数据</button>
+            </div>
+            <div id="filterPanel" class="filter-panel hidden"></div>
+            <div class="query-results" id="queryResults"></div>
+          </div>
+          <!-- DOM 树容器 -->
+          <div id="domTreeContainer" class="dom-tree-container hidden"></div>
+          <!-- JSON 查看器 -->
+          <div id="jsonViewerContainer" class="json-viewer-container hidden"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 分隔条 -->
+  <div class="resize-handle" id="resizeHandle"></div>
+
+  <!-- 右侧: 浏览区 -->
+  <div class="panel panel-right" id="panelRight">
+    <div class="panel-header">
+      <span>浏览区</span>
+      <div class="panel-actions">
+        <button id="btnElementPicker" class="btn btn-sm btn-accent hidden" title="元素提取">元素提取</button>
+        <button id="btnRefresh" class="btn btn-sm" title="刷新页面">刷新</button>
+      </div>
+    </div>
+    <div class="webview-container" id="webviewContainer">
+      <webview id="webview" src="about:blank" style="width:100%;flex:1;display:inline-flex;contain:layout;"
+        allowpopups preload="../webview-preload.js" nodeintegration
+        useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"></webview>
+      <div id="webviewOverlay" class="webview-overlay">
+        <div class="overlay-content">
+          <div class="overlay-icon">&#127760;</div>
+          <p>在上方输入网址后点击"加载"</p>
+          <div class="quick-links">
+            <button class="quick-link" data-url="https://www.baidu.com">百度</button>
+            <button class="quick-link" data-url="https://www.taobao.com">淘宝</button>
+            <button class="quick-link" data-url="https://www.jd.com">京东</button>
+            <button class="quick-link" data-url="https://www.zhihu.com">知乎</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 数据采集 / 批量抓取 浮窗（合并） -->
+      <div id="paginationFloat" class="pagination-float hidden">
+        <div class="pf-card">
+          <button id="pfGear" class="pf-gear" title="配置">&#9881;</button>
+          <button id="pfPause" class="pf-arrow pf-batch-only" title="暂停/继续">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16" rx="1"/><rect x="14" y="4" width="5" height="16" rx="1"/></svg>
+          </button>
+          <button id="pfPrev" class="pf-arrow" title="▲">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>
+          </button>
+          <span id="pfPage" class="pf-page">-</span>
+          <button id="pfNext" class="pf-arrow" title="▼">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="pf-divider"></div>
+          <button id="pfStop" class="pf-arrow pf-batch-only" title="停止" style="color:var(--red)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+          </button>
+          <button id="pfCollect" class="pf-collect pf-collect-only" title="自动采集">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>
+          <span id="pfCount" class="pf-count">0条</span>
+        </div>
+      </div>
+
+      <!-- 数据采集配置弹窗 -->
+      <div id="paginationConfig" class="pf-config-popup hidden">
+        <div class="pf-config-header">
+          <span>数据采集配置</span>
+          <button id="pfConfigClose" class="pf-config-close">&times;</button>
+        </div>
+        <!-- Tab 切换 -->
+        <div class="pf-tabs">
+          <button class="pf-tab active" data-tab="scroll">滚动加载</button>
+          <button class="pf-tab" data-tab="api">API加载</button>
+        </div>
+        <div class="pf-config-body">
+          <!-- 滚动加载 Tab -->
+          <div class="pf-tab-content" id="pfTabScroll">
+            <div class="pf-config-row">
+              <div class="pf-config-col" style="flex:1">
+                <label class="pf-config-label">提取选择器 <span style="font-weight:400;color:var(--text-dim)">（CSS / XPath，留空则用页面点选）</span></label>
+                <div style="display:flex;gap:6px">
+                  <select id="pfScrollSelType" class="pf-config-input" style="width:70px;flex-shrink:0">
+                    <option value="css">CSS</option>
+                    <option value="xpath">XPath</option>
+                  </select>
+                  <input type="text" id="pfScrollSelector" class="pf-config-input" style="flex:1;width:auto" placeholder="例如 .product-item 或 //div[@class='item']">
+                </div>
+              </div>
+            </div>
+            <div class="pf-config-row pf-config-row-3">
+              <div class="pf-config-col">
+                <label class="pf-config-label">滚动步长(px)</label>
+                <input type="number" id="pfScrollStep" class="pf-config-input" value="400" min="50" step="50">
+              </div>
+              <div class="pf-config-col">
+                <label class="pf-config-label">回弹距离(px)</label>
+                <input type="number" id="pfScrollBounce" class="pf-config-input" value="50" min="0" step="10">
+              </div>
+              <div class="pf-config-col">
+                <label class="pf-config-label">到底等待(ms)</label>
+                <input type="number" id="pfScrollWait" class="pf-config-input" value="2000" min="500" step="500">
+              </div>
+            </div>
+            <div class="pf-config-row pf-config-row-2">
+              <div class="pf-config-col">
+                <label class="pf-config-label">滚动间隔(ms) 随机范围</label>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <input type="number" id="pfScrollIntervalMin" class="pf-config-input" value="500" min="100" step="100" style="flex:1">
+                  <span style="color:var(--text-dim);font-size:12px">~</span>
+                  <input type="number" id="pfScrollIntervalMax" class="pf-config-input" value="2000" min="200" step="100" style="flex:1">
+                </div>
+              </div>
+            </div>
+            <div class="pf-config-row pf-config-row-2">
+              <div class="pf-config-col">
+                <label class="pf-config-label">步间等待(ms) 随机范围</label>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <input type="number" id="pfScrollStepDelayMin" class="pf-config-input" value="200" min="50" step="50" style="flex:1">
+                  <span style="color:var(--text-dim);font-size:12px">~</span>
+                  <input type="number" id="pfScrollStepDelayMax" class="pf-config-input" value="400" min="100" step="50" style="flex:1">
+                </div>
+              </div>
+              <div class="pf-config-col">
+                <label class="pf-config-label">回弹等待(ms) 随机范围</label>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <input type="number" id="pfScrollBounceDelayMin" class="pf-config-input" value="100" min="0" step="50" style="flex:1">
+                  <span style="color:var(--text-dim);font-size:12px">~</span>
+                  <input type="number" id="pfScrollBounceDelayMax" class="pf-config-input" value="200" min="50" step="50" style="flex:1">
+                </div>
+              </div>
+            </div>
+            <div class="pf-config-row pf-config-row-4">
+              <div class="pf-config-col">
+                <label class="pf-config-label">最大步数</label>
+                <input type="number" id="pfScrollMaxSteps" class="pf-config-input" value="60" min="10" step="10">
+              </div>
+              <div class="pf-config-col">
+                <label class="pf-config-label">不变次数</label>
+                <input type="number" id="pfScrollUnchangedLimit" class="pf-config-input" value="3" min="1" max="10" step="1">
+              </div>
+              <div class="pf-config-col">
+                <label class="pf-config-label">底部容差(px)</label>
+                <input type="number" id="pfScrollBottomTolerance" class="pf-config-input" value="80" min="0" step="20">
+              </div>
+              <div class="pf-config-col">
+                <label class="pf-config-label">回顶等待(ms)</label>
+                <input type="number" id="pfScrollBackTopWait" class="pf-config-input" value="500" min="100" step="100">
+              </div>
+            </div>
+          </div>
+          <!-- API加载 Tab -->
+          <div class="pf-tab-content hidden" id="pfTabApi">
+            <!-- 网络拦截候选（放最前面，优先展示） -->
+            <div class="pf-network-candidates hidden" id="pfNetworkCandidates">
+              <div class="pf-network-header">
+                <span id="pfNetworkTitle">数据源候选</span>
+                <button id="pfNetworkRefresh" class="pf-network-refresh" title="刷新">&#x21bb;</button>
+              </div>
+              <div class="pf-network-list" id="pfNetworkList"></div>
+              <details class="pf-network-all" id="pfNetworkAllDetails">
+                <summary id="pfNetworkAllSummary">显示全部请求</summary>
+                <div class="pf-network-list" id="pfNetworkAllList"></div>
+              </details>
+            </div>
+            <div class="pf-config-row">
+              <label class="pf-config-label">API 地址</label>
+              <select id="pfApiUrlList" class="pf-config-input pf-api-select" size="1"></select>
+              <input type="text" id="pfApiUrl" class="pf-config-input hidden" placeholder="输入 API 地址">
+            </div>
+            <div class="pf-config-row pf-config-row-3">
+              <div class="pf-config-col">
+                <label class="pf-config-label">页码参数</label>
+                <input type="text" id="pfPageParam" class="pf-config-input" value="page">
+              </div>
+              <div class="pf-config-col">
+                <label class="pf-config-label">每页条数</label>
+                <input type="number" id="pfPageSize" class="pf-config-input" value="20" min="1">
+              </div>
+              <div class="pf-config-col">
+                <label class="pf-config-label">条数参数</label>
+                <input type="text" id="pfSizeParam" class="pf-config-input" value="size">
+              </div>
+            </div>
+            <div class="pf-config-row pf-config-row-3">
+              <div class="pf-config-col">
+                <label class="pf-config-label">请求方式</label>
+                <select id="pfMethod" class="pf-config-input">
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                </select>
+              </div>
+              <div class="pf-config-col">
+                <label class="pf-config-label">间隔(ms)</label>
+                <input type="number" id="pfInterval" class="pf-config-input" value="500" min="200" step="100">
+              </div>
+              <div class="pf-config-col">
+                <label class="pf-config-label">起始页</label>
+                <input type="number" id="pfStartPage" class="pf-config-input" value="1" min="1">
+              </div>
+            </div>
+            <div class="pf-config-row">
+              <label class="pf-config-label">额外参数</label>
+              <input type="text" id="pfExtraParams" class="pf-config-input" placeholder="&sort=price&order=asc">
+            </div>
+            <div class="pf-config-row pf-config-row-3">
+              <div class="pf-config-col">
+                <label class="pf-config-label">请求超时(ms)</label>
+                <input type="number" id="pfApiTimeout" class="pf-config-input" value="30000" min="1000" step="1000">
+              </div>
+              <div class="pf-config-col">
+                <label class="pf-config-label">重试次数</label>
+                <input type="number" id="pfApiRetries" class="pf-config-input" value="1" min="0" max="10" step="1">
+              </div>
+              <div class="pf-config-col">
+                <label class="pf-config-label">分页类型</label>
+                <select id="pfPaginationType" class="pf-config-input">
+                  <option value="page">page</option>
+                  <option value="offset">offset</option>
+                  <option value="cursor">cursor</option>
+                </select>
+              </div>
+            </div>
+            <div class="pf-config-row" id="pfCursorRow" style="display:none">
+              <div class="pf-config-col">
+                <label class="pf-config-label">游标参数名</label>
+                <input type="text" id="pfCursorParam" class="pf-config-input" value="cursor" placeholder="cursor">
+              </div>
+              <div class="pf-config-col">
+                <label class="pf-config-label">游标JSON路径</label>
+                <input type="text" id="pfCursorPath" class="pf-config-input" placeholder="nextCursor 或 data.cursor">
+              </div>
+            </div>
+            <div class="pf-config-row">
+              <label class="pf-config-label">数据路径(选填)</label>
+              <input type="text" id="pfApiDataPath" class="pf-config-input" placeholder="留空自动检测，或填写如 data.result.items">
+            </div>
+          </div>
+          <!-- 会话/反爬（共用） -->
+          <div class="pf-config-section-label">会话 / 反爬</div>
+          <div class="pf-config-row pf-config-check">
+            <label class="checkbox-label">
+              <input type="checkbox" id="pfUseCookie" checked> 携带当前页 Cookie
+            </label>
+          </div>
+          <div class="pf-config-row pf-config-check">
+            <label class="checkbox-label">
+              <input type="checkbox" id="pfApiListen"> 监听接口JSON
+            </label>
+          </div>
+        </div>
+        <div class="pf-config-footer">
+          <button id="pfConfigConfirm" class="btn btn-sm btn-accent">确认</button>
+        </div>
+      </div>
+    </div>
+    <!-- 元素提取栏 -->
+    <div class="element-picker-bar hidden" id="elementPickerBar">
+      <div class="picker-info">
+        <span class="picker-indicator">元素提取模式</span>
+        <span id="pickedCount">已选: 0 项</span>
+        <span class="picker-mode-switch">
+          <button id="btnPickModeClick" class="picker-mode-btn active" title="点击选择">点选</button>
+          <button id="btnPickModeDrag" class="picker-mode-btn" title="拖拽框选">框选</button>
+          <button id="btnPickModeNested" class="picker-mode-btn" title="层级穿透选择">穿透</button>
+        </span>
+      </div>
+      <div class="picker-actions">
+        <button id="btnPickAuto" class="btn btn-sm btn-accent">自动识别同类</button>
+        <button id="btnManagePicked" class="btn btn-sm btn-primary">管理已选</button>
+        <button id="btnBarSaveRules" class="btn btn-sm btn-primary" title="持久化保存选择器规则">保存规则</button>
+      </div>
+    </div>
+
+    <!-- 已选元素编辑面板 -->
+    <div class="element-editor hidden" id="elementEditor">
+      <div class="element-editor-resize" id="editorResize"></div>
+      <div class="element-editor-header">
+        <span class="element-editor-title">已选元素管理</span>
+        <div class="element-editor-actions">
+          <button id="btnEditorRematchAll" class="btn btn-sm" style="height:24px;padding:0 8px;font-size:11px" title="重新匹配所有选择器">全部重匹配</button>
+          <button id="btnEditorExpandAll" class="btn btn-sm" onclick="window._editorExpandAll()" style="height:24px;padding:0 8px;font-size:11px" title="全部展开">全部展开</button>
+          <button id="btnEditorCollapseAll" class="btn btn-sm" onclick="window._editorCollapseAll()" style="height:24px;padding:0 8px;font-size:11px" title="全部折叠">全部折叠</button>
+          <button id="btnEditorSave" class="btn btn-sm" style="height:24px;padding:0 8px;font-size:11px" title="持久化保存选择器">保存规则</button>
+          <button id="btnEditorClose" class="btn btn-sm" style="height:24px;padding:0 8px;font-size:11px">&times;</button>
+        </div>
+      </div>
+      <div class="element-editor-body" id="elementEditorBody">
+        <div class="tree-empty">暂无已选元素</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 状态栏 -->
+<footer class="statusbar">
+  <span id="statusText">就绪</span>
+  <span class="statusbar-right">
+    <span id="statusEditor" style="color:var(--accent);font-weight:600"></span>
+    <span id="statusDomain"></span>
+    <span id="statusCookie"></span>
+    <span id="statusSizeChars"></span>
+    <span id="statusSizeLines"></span>
+    <span id="statusTime"></span>
+  </span>
+</footer>
+
+<!-- 批量抓取配置弹框 -->
+<div class="modal-overlay hidden" id="batchModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">批量抓取配置</span>
+      <button class="modal-close" id="btnBatchModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- 模式切换 Tab -->
+      <div class="batch-mode-tabs">
+        <button class="batch-mode-tab active" data-mode="template">模板模式</button>
+        <button class="batch-mode-tab" data-mode="urllist">URL列表</button>
+        <button class="batch-mode-tab" data-mode="localfiles">本地文件</button>
+        <button class="batch-mode-tab" data-mode="api">API 接入</button>
+      </div>
+
+      <!-- 模板模式内容 -->
+      <div class="batch-mode-content" id="batchModeTemplate">
+        <div class="form-group">
+          <label class="form-label">URL 模板</label>
+          <textarea id="batchUrlTemplate" class="form-textarea" rows="2" placeholder="https://example.com/search?q={q}&amp;page={page}"></textarea>
+          <span class="form-hint">占位符: {q} = 搜索词, {page} = 页码</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">搜索词（一行一个，或逗号分隔）</label>
+          <textarea id="batchQueries" class="form-textarea" rows="3" placeholder="连衣裙&#10;T恤&#10;牛仔裤"></textarea>
+        </div>
+        <div class="form-group form-row">
+          <div class="form-col">
+            <label class="form-label">起始页</label>
+            <input type="number" id="batchPageStart" class="form-input" value="1" min="1">
+          </div>
+          <div class="form-col">
+            <label class="form-label">结束页</label>
+            <input type="number" id="batchPageEnd" class="form-input" value="10" min="1">
+          </div>
+          <div class="form-col">
+            <label class="form-label">间隔(ms)</label>
+            <input type="number" id="batchInterval" class="form-input" value="500" min="200" step="100">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">标签类型</label>
+          <div class="form-tags-mode">
+            <label class="radio-label"><input type="radio" name="batchTagMode" value="cartesian" checked> 笛卡尔积（q x page）</label>
+            <label class="radio-label"><input type="radio" name="batchTagMode" value="zip"> 一一对应（q[0]→page[0] ...）</label>
+          </div>
+        </div>
+        <!-- URL 实时预览 -->
+        <div class="batch-url-preview" id="batchUrlPreview">
+          <div class="batch-url-preview-header">
+            <span class="batch-url-preview-title">URL预览</span>
+            <span class="batch-url-preview-count" id="batchUrlPreviewCount"></span>
+          </div>
+          <div class="batch-url-preview-list" id="batchUrlPreviewList"></div>
+        </div>
+      </div>
+
+      <!-- URL列表模式内容 -->
+      <div class="batch-mode-content hidden" id="batchModeUrlList">
+        <div class="form-group">
+          <label class="form-label">URL 列表（一行一个，支持 {page} 占位符）</label>
+          <textarea id="batchUrlList" class="form-textarea" rows="5" placeholder="https://shop.com/cat/neca?p={page}&#10;https://shop.com/cat/hiya?p={page}&#10;https://shop.com/item/12345"></textarea>
+          <span class="form-hint">不含 {page} 的 URL 只抓取一次</span>
+        </div>
+        <div class="form-group" style="flex-direction:row;align-items:center;gap:8px">
+          <button id="btnImportUrlFile" class="btn btn-sm" style="height:28px">导入文件</button>
+          <input type="file" id="batchUrlFileInput" accept=".txt,.csv" style="display:none">
+          <span class="form-hint">支持 .txt / .csv</span>
+        </div>
+        <div class="form-group form-row">
+          <div class="form-col">
+            <label class="form-label">起始页</label>
+            <input type="number" id="batchUrlListPageStart" class="form-input" value="1" min="1">
+          </div>
+          <div class="form-col">
+            <label class="form-label">结束页</label>
+            <input type="number" id="batchUrlListPageEnd" class="form-input" value="10" min="1">
+          </div>
+        </div>
+        <!-- URL 列表实时预览 -->
+        <div class="batch-url-preview" id="batchUrlListPreview">
+          <div class="batch-url-preview-header">
+            <span class="batch-url-preview-title">URL预览</span>
+            <span class="batch-url-preview-count" id="batchUrlListPreviewCount"></span>
+          </div>
+          <div class="batch-url-preview-list" id="batchUrlListPreviewList"></div>
+        </div>
+      </div>
+
+      <!-- 本地文件模式内容 -->
+      <div class="batch-mode-content hidden" id="batchModeLocalFiles">
+        <div class="batch-local-drop" id="batchLocalDrop">
+          <div class="batch-local-drop-icon">&#128196;</div>
+          <div class="batch-local-drop-text">拖拽 HTML 文件到此处<br>或点击下方按钮选择文件</div>
+          <button id="btnBatchPickFiles" class="btn btn-accent" style="margin-top:8px">选择文件</button>
+          <input type="file" id="batchLocalFileInput" accept=".html,.htm" multiple style="display:none">
+        </div>
+        <div class="batch-local-preview" id="batchLocalPreview" style="display:none">
+          <div class="batch-local-preview-header">
+            <span class="batch-local-preview-title">文件列表</span>
+            <span class="batch-local-preview-count" id="batchLocalPreviewCount"></span>
+            <button id="btnBatchLocalClear" class="btn btn-sm" style="margin-left:auto">清空</button>
+          </div>
+          <div class="batch-local-preview-list" id="batchLocalPreviewList"></div>
+        </div>
+      </div>
+
+      <!-- API 接入模式内容 -->
+      <div class="batch-mode-content hidden" id="batchModeApi">
+        <div class="form-group">
+          <label class="form-label">请求 URL</label>
+          <input type="text" id="apiUrl" class="form-input" placeholder="https://api.example.com/data">
+        </div>
+        <div class="form-group form-row">
+          <div class="form-col" style="flex:0 0 140px">
+            <label class="form-label">请求方法</label>
+            <select id="apiMethod" class="form-input">
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="DELETE">DELETE</option>
+            </select>
+          </div>
+          <div class="form-col">
+            <label class="form-label">超时(ms)</label>
+            <input type="number" id="apiTimeout" class="form-input" value="30000" min="1000" step="1000">
+          </div>
+        </div>
+        <div class="form-group">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <label class="form-label" style="margin:0">请求头</label>
+            <button id="btnAddHeader" class="btn btn-sm" style="height:24px;padding:0 8px;font-size:11px">+ 添加</button>
+          </div>
+          <div id="apiHeadersList" class="api-headers-list">
+            <div class="api-header-row">
+              <input type="text" class="form-input api-header-key" placeholder="Key" style="flex:1">
+              <input type="text" class="form-input api-header-val" placeholder="Value" style="flex:2">
+              <button class="btn btn-sm api-header-remove" style="height:28px;padding:0 6px;font-size:12px;color:var(--red);border-color:transparent;background:transparent" title="删除">&times;</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-group" style="flex-direction:row;align-items:center;gap:12px">
+          <label class="checkbox-label" style="display:flex;align-items:center;gap:6px">
+            <input type="checkbox" id="apiUseCookie"> 附送已保存 Cookie
+          </label>
+          <span id="apiCookieHint" style="font-size:11px;color:var(--text-dim);display:none"></span>
+          <button id="btnApiLoadCookie" class="btn btn-sm" style="height:24px;padding:0 8px;font-size:11px">加载 Cookie</button>
+        </div>
+        <div class="form-group" id="apiBodyGroup" style="display:none">
+          <label class="form-label">请求体 (Body)</label>
+          <textarea id="apiBody" class="form-textarea" rows="6" placeholder='{"key": "value"}'></textarea>
+        </div>
+      </div>
+
+      <!-- 提取配置 -->
+      <div class="form-group" id="batchExtractConfig">
+        <label class="form-label">提取方式</label>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+          <label class="radio-label"><input type="radio" name="batchExtractModeDlg" value="rules" checked> 保存规则</label>
+          <span id="batchDlgRulesHint" style="font-size:11px;color:var(--text-dim)"></span>
+        </div>
+        <div style="margin-bottom:4px">
+          <label class="radio-label"><input type="radio" name="batchExtractModeDlg" value="selector"> 选择器</label>
+          <button id="btnBatchAddSelector" class="btn btn-sm" style="height:24px;padding:0 8px;font-size:11px;margin-left:8px">+ 添加</button>
+        </div>
+        <div style="margin-bottom:4px">
+          <label class="radio-label"><input type="radio" name="batchExtractModeDlg" value="chain"> 链路</label>
+        </div>
+        <div id="batchSelectorRows" style="display:flex;flex-direction:column;gap:4px">
+          <div class="batch-selector-row" style="display:flex;align-items:center;gap:4px">
+            <input type="text" class="form-input batch-dlg-selector" placeholder="提取模式下选元素自动填入" style="flex:1;height:28px;padding:0 8px;font-size:12px">
+            <button class="btn btn-sm batch-sel-remove" style="height:24px;padding:0 6px;font-size:12px;color:var(--red);border-color:transparent;background:transparent" title="删除">×</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 页面加载配置 -->
+      <div class="form-group" id="batchLoadConfig">
+        <label class="form-label">页面加载方式</label>
+        <div style="display:flex;align-items:center;gap:16px">
+          <label class="radio-label"><input type="radio" name="batchPageType" value="static" checked> 静态网页</label>
+          <label class="radio-label"><input type="radio" name="batchPageType" value="dynamic"> 动态网页</label>
+        </div>
+          <div id="batchDynamicConfig" style="display:none;margin-top:8px;padding:10px 12px;background:var(--bg-hover);border-radius:6px;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <label class="form-label" style="margin:0;font-size:12px">等待策略：</label>
+              <select id="batchDynamicStrategy" class="form-input" style="width:auto;height:28px;padding:0 8px;font-size:12px">
+                <option value="fixed">固定延时</option>
+                <option value="networkIdle">等待网络空闲</option>
+                <option value="waitSelector">等待选择器出现</option>
+                <option value="clickNext">翻页按钮点击</option>
+                <option value="manual">手动翻页</option>
+              </select>
+            </div>
+            <div id="batchDynamicOptsFixed" style="display:flex;align-items:center;gap:6px">
+              <label class="form-label" style="margin:0;font-size:12px">额外等待(ms)</label>
+              <input type="number" id="batchWaitMs" class="form-input" value="3000" min="500" step="500" style="width:80px;height:28px;padding:0 6px">
+            </div>
+            <div id="batchDynamicOptsIdle" style="display:none;align-items:center;gap:12px;flex-wrap:wrap">
+              <span style="display:flex;align-items:center;gap:4px">
+                <label class="form-label" style="margin:0;font-size:12px">无请求超(ms)</label>
+                <input type="number" id="batchDynamicIdleMs" class="form-input" value="2000" min="500" step="500" style="width:80px;height:28px;padding:0 6px">
+              </span>
+              <span style="display:flex;align-items:center;gap:4px">
+                <label class="form-label" style="margin:0;font-size:12px">最长等待(s)</label>
+                <input type="number" id="batchDynamicMaxWait" class="form-input" value="30" min="1" max="120" step="1" style="width:60px;height:28px;padding:0 6px">
+              </span>
+            </div>
+            <div id="batchDynamicOptsSelector" style="display:none;align-items:center;gap:12px;flex-wrap:wrap">
+              <span style="display:flex;align-items:center;gap:4px;flex:1">
+                <label class="form-label" style="margin:0;font-size:12px;white-space:nowrap">CSS选择器</label>
+                <input type="text" id="batchDynamicSelector" class="form-input" placeholder=".product-list, .result-item" style="flex:1;height:28px;padding:0 6px;font-size:12px">
+              </span>
+              <span style="display:flex;align-items:center;gap:4px">
+                <label class="form-label" style="margin:0;font-size:12px">最长等待(s)</label>
+                <input type="number" id="batchDynamicSelectorMaxWait" class="form-input" value="30" min="1" max="120" step="1" style="width:60px;height:28px;padding:0 6px">
+              </span>
+            </div>
+            <div id="batchDynamicOptsClickNext" style="display:none;flex-direction:column;gap:8px">
+              <div id="batchClickNextSelectorRow" style="display:flex;align-items:center;gap:4px">
+                <label class="form-label" style="margin:0;font-size:12px;white-space:nowrap">下一页选择器</label>
+                <input type="text" id="batchClickNextSelector" class="form-input" placeholder=".next-btn, a[rel=next], .pagination .next" style="flex:1;height:28px;padding:0 6px;font-size:12px">
+              </div>
+              <div style="display:flex;align-items:center;gap:12px">
+                <span style="display:flex;align-items:center;gap:4px">
+                  <label class="form-label" style="margin:0;font-size:12px">点击前等(ms)</label>
+                  <input type="number" id="batchClickNextPreWait" class="form-input" value="500" min="0" step="200" style="width:80px;height:28px;padding:0 6px">
+                </span>
+                <span style="display:flex;align-items:center;gap:4px">
+                  <label class="form-label" style="margin:0;font-size:12px">点击后等(ms)</label>
+                  <input type="number" id="batchClickNextInterval" class="form-input" value="2000" min="500" step="500" style="width:80px;height:28px;padding:0 6px">
+                </span>
+              </div>
+            </div>
+          </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="btnBatchCancel" class="btn btn-sm">取消</button>
+      <button id="btnApiSend" class="btn btn-sm btn-accent hidden">发送</button>
+      <button id="btnBatchConfirm" class="btn btn-sm btn-accent">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 表单交互弹框 -->
+<div class="modal-overlay hidden" id="formModal">
+  <div class="modal-box" style="width:640px;max-height:85vh">
+    <div class="modal-header">
+      <span class="modal-title" id="formModalTitle">表单交互</span>
+      <button class="modal-close" id="btnFormModalClose">&times;</button>
+    </div>
+    <div class="modal-body" style="max-height:55vh;overflow-y:auto" id="formModalBody">
+    </div>
+    <div class="modal-footer">
+      <button id="btnFormModalCancel" class="btn btn-sm">取消</button>
+      <button id="btnFormReset" class="btn btn-sm">重置</button>
+      <button id="btnFormSubmit" class="btn btn-sm btn-accent">提交表单</button>
+    </div>
+  </div>
+</div>
+
+<!-- 自适应选择器弹框 -->
+<div class="modal-overlay hidden" id="selectorModal">
+  <div class="modal-box" style="width:520px;max-height:70vh">
+    <div class="modal-header">
+      <span class="modal-title">选择器选择</span>
+      <button class="modal-close" id="btnSelectorModalClose">&times;</button>
+    </div>
+    <div class="modal-body" id="selectorModalBody" style="max-height:45vh;overflow-y:auto">
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px">选择最适合提取目标元素的 CSS 选择器：</p>
+      <div id="selectorOptions" class="selector-options"></div>
+    </div>
+    <div class="modal-footer">
+      <button id="btnSelectorCancel" class="btn btn-sm">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 层级穿透弹框 -->
+<div class="modal-overlay hidden" id="nestedModal">
+  <div class="modal-box" style="width:480px;max-height:60vh">
+    <div class="modal-header">
+      <span class="modal-title">选择目标元素</span>
+      <button class="modal-close" id="btnNestedModalClose">&times;</button>
+    </div>
+    <div class="modal-body" id="nestedModalBody" style="max-height:35vh;overflow-y:auto">
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px">点击位置包含多个嵌套元素，请选择您要提取的：</p>
+      <div id="nestedOptions" class="selector-options"></div>
+    </div>
+    <div class="modal-footer">
+      <button id="btnNestedCancel" class="btn btn-sm">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 自定义导出方案弹框 -->
+<div class="modal-overlay hidden" id="schemaModal">
+  <div class="modal-box" id="schemaModalBox" style="width:820px;max-height:92vh">
+    <div class="modal-header">
+      <span class="modal-title">自定义导出</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="modal-fullscreen-btn" id="btnSchemaFullscreen" title="全屏">⛶</button>
+        <button class="modal-close" id="btnSchemaModalClose">&times;</button>
+      </div>
+    </div>
+    <div class="modal-body" style="max-height:65vh;overflow-y:auto">
+      <!-- Tab 切换 -->
+      <div class="schema-mode-tabs">
+        <button class="schema-mode-tab active" data-tab="manual" id="schemaTabManual">手动</button>
+        <button class="schema-mode-tab" data-tab="chain" id="schemaTabChain">链路</button>
+      </div>
+
+      <!-- 手动面板 -->
+      <div id="schemaManualPanel">
+      <!-- 方案管理行 -->
+      <div class="schema-manage-row">
+        <input type="text" id="schemaName" class="form-input" placeholder="输入方案名称..." style="flex:2;min-width:120px">
+        <button id="btnSchemaNew" class="btn btn-sm" style="height:30px;font-size:12px" title="清空字段，新建方案">新建</button>
+        <button id="btnSchemaSave" class="btn btn-sm btn-accent" style="height:30px">保存</button>
+        <div class="chain-custom-select" id="manualSchemeDropdown" style="flex:2">
+          <div class="chain-custom-select-trigger" id="manualSchemeTrigger">
+            <span id="manualSchemeTriggerText">选择方案</span>
+          </div>
+          <div class="chain-custom-select-options hidden" id="manualSchemeOptions"></div>
+        </div>
+        <button id="btnSchemaImport" class="btn btn-sm" style="height:30px;padding:0 8px">导入</button>
+        <button id="btnSchemaExport" class="btn btn-sm" style="height:30px;padding:0 8px">导出</button>
+        <input type="file" id="schemaFileInput" accept=".json" style="display:none">
+      </div>
+
+      <!-- 字段列表 -->
+      <div class="schema-fields-header">
+        <span class="form-label">提取字段</span>
+        <button id="btnAddField" class="btn btn-sm btn-accent" style="height:26px;padding:0 10px">+ 添加字段</button>
+      </div>
+      <div class="schema-fields-table">
+        <div class="schema-field-row schema-field-header-row">
+          <span class="sf-col-type">语言</span>
+          <span class="sf-col-selector">选择器</span>
+          <span class="sf-col-attr">属性</span>
+          <span class="sf-col-name">字段名</span>
+          <span class="sf-col-count">匹配</span>
+          <span class="sf-col-preview"></span>
+          <span class="sf-col-del"></span>
+        </div>
+        <div id="schemaFieldsList"></div>
+      </div>
+      </div><!-- /schemaManualPanel -->
+
+      <!-- 链路面板 -->
+      <div id="schemaChainPanel" class="hidden">
+        <!-- 链路方案管理 -->
+        <div class="schema-manage-row" style="margin-bottom:6px">
+          <input type="text" id="chainSchemaName" class="form-input" placeholder="输入方案名称..." style="flex:2;min-width:120px">
+          <button id="btnChainSchemaNew" class="btn btn-sm" style="height:30px;font-size:12px" title="新建方案，清空编辑器">新建</button>
+          <button id="btnChainSchemaSave" class="btn btn-sm btn-accent" style="height:30px">保存</button>
+          <div class="chain-custom-select" id="chainSchemeDropdown">
+            <div class="chain-custom-select-trigger" id="chainSchemeTrigger">
+              <span id="chainSchemeTriggerText">选择方案</span>
+            </div>
+            <div class="chain-custom-select-options hidden" id="chainSchemeOptions"></div>
+          </div>
+          <button id="btnChainSchemaImport" class="btn btn-sm" style="height:30px;padding:0 8px">导入</button>
+          <button id="btnChainSchemaExport" class="btn btn-sm" style="height:30px;padding:0 8px">导出</button>
+        </div>
+        <input type="file" id="chainSchemaFileInput" accept=".json" style="display:none">
+        <div class="schema-chain-config">
+          <span style="font-size:12px">类型:</span>
+          <button class="schema-type-btn active" id="schemaTypeCss" data-type="css">CSS</button>
+          <button class="schema-type-btn" id="schemaTypeXpath" data-type="xpath">XPath</button>
+          <span style="font-size:12px">链路:</span>
+          <textarea id="schemaChainInput" class="form-input" style="flex:1;min-width:200px;height:30px;min-height:30px;font-family:Consolas,monospace"
+                 placeholder="输入最深选择器，如 img.xxx 或 //div/a" rows="1"></textarea>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button id="btnTraceChain" class="btn btn-sm" style="height:30px;background:var(--orange);border-color:var(--orange);color:#000;font-weight:600">溯源</button>
+            <button id="btnParseChain" class="btn btn-sm btn-accent" style="height:30px">解析</button>
+          </div>
+        </div>
+        <div id="chainTraceResult" class="chain-trace hidden"></div>
+        <!-- 左右分栏：结构树 + 节点编辑 -->
+        <div class="chain-split-layout" id="chainSplitLayout">
+          <div class="chain-tree-panel" id="chainTreePanel">
+            <div class="chain-tree-header">
+              <span>🔗 结构</span>
+              <span class="chain-tree-hint">点击节点编辑</span>
+            </div>
+            <div class="chain-tree-scroll" id="schemaChainLayers">
+              <div class="tree-empty">输入链路后点击"解析"</div>
+            </div>
+          </div>
+          <div class="chain-split-divider" id="chainSplitDivider"></div>
+          <div class="chain-editor-panel" id="chainEditorPanel">
+            <div class="chain-editor-header" id="chainEditorTitle">← 点击左侧节点编辑</div>
+            <div class="chain-editor-body" id="chainEditorBody">
+              <div class="tree-empty">选择一个节点开始配置提取属性</div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /schemaChainPanel -->
+
+      <!-- 弹窗内实时预览 -->
+      <div class="schema-preview-section">
+        <div class="schema-preview-header">
+          <span class="form-label">快速预览</span>
+          <span id="schemaPreviewInfo" style="font-size:11px;color:var(--text-dim)"></span>
+        </div>
+        <div class="schema-preview-wrap" id="schemaPreviewWrap">
+          <div class="tree-empty">输入选择器后自动预览</div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer schema-footer">
+      <button id="btnSchemaCancel" class="btn btn-sm">取消</button>
+      <button id="btnSchemaSaveQuery" class="btn btn-sm btn-accent" style="background:var(--green);border-color:var(--green)">保存并查询</button>
+    </div>
+  </div>
+</div>
+
+<!-- 合并/拆分统一弹框 -->
+
+<div class="modal-overlay hidden" id="pickerModal">
+  <div class="modal-box" style="width:520px;max-height:75vh">
+    <div class="modal-header">
+      <span class="modal-title" id="pickerModalTitle">选择元素</span>
+      <div class="picker-tabs">
+        <button class="picker-tab active" data-tab="inline" onclick="window._switchPickerTab('inline')">同容器</button>
+        <button class="picker-tab" data-tab="all" onclick="window._switchPickerTab('all')">全部</button>
+        <button class="picker-tab" data-tab="manual" onclick="window._switchPickerTab('manual')">手动</button>
+      </div>
+      <button class="modal-close" id="btnPickerClose" onclick="window._hidePicker()">&times;</button>
+    </div>
+    <div class="modal-body" style="max-height:45vh;overflow-y:auto">
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:8px">
+        当前元素：<strong id="pickerCurrent" style="color:var(--text-bright)"></strong>
+      </p>
+      <div id="pickerInfo" style="padding:8px 12px;font-size:12px;color:var(--accent);background:var(--bg);border-radius:4px;margin-bottom:8px;display:none"></div>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px" id="pickerHint"></p>
+      <div id="pickerList" class="selector-options"></div>
+    </div>
+    <div class="modal-footer" style="display:flex;align-items:center;justify-content:space-between">
+      <span class="picker-preview-text" style="font-size:12px;color:var(--text-bright);font-weight:500;flex:1;word-break:break-all;white-space:normal;padding-right:12px"></span>
+      <div style="display:flex;gap:8px;flex-shrink:0">
+        <button id="btnPickerCancel" class="btn btn-sm" onclick="window._hidePicker()">取消</button>
+        <button id="btnPickerConfirm" class="btn btn-sm btn-accent" onclick="window._doPickerConfirm()">确认</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 设置弹框 -->
+<div class="modal-overlay hidden" id="settingsModal">
+  <div class="modal-box" style="width:480px;max-height:80vh">
+    <div class="modal-header">
+      <span class="modal-title">设置 <span class="settings-hint">修改后自动保存，查询时生效</span></span>
+      <button class="modal-close" id="btnSettingsModalClose">&times;</button>
+    </div>
+    <div class="modal-body" id="settingsBody">
+      <div data-section="通用">
+        <div class="settings-group" style="margin-bottom:10px">
+          <label class="settings-label" title="hover 表格行时在页面上高亮对应元素，点击行则滚动定位">表格页面联动</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="linkageSwitch">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="settings-group" style="margin-bottom:10px">
+          <label class="settings-label" title="查询时将子节点文本展开为独立列（子1、子2…）">展开子节点</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="expandChildren">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">子节点分隔符</label>
+          <input type="text" id="globalChildDelim" class="settings-input" value=" | " placeholder=" | ">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">多值分隔符</label>
+          <input type="text" id="globalMultiDelim" class="settings-input" value=" | " placeholder=" | ">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">文本上限（字符）</label>
+          <input type="number" id="maxTextLen" class="settings-input" value="2000" min="100" max="50000" step="100">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">结果条数上限</label>
+          <input type="number" id="maxResults" class="settings-input" value="1000" min="50" max="10000" step="50">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">源码预览上限（行）</label>
+          <input type="number" id="maxSourcePreview" class="settings-input" value="2000" min="100" max="50000" step="500">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">表格文本上限（字符）</label>
+          <input type="number" id="maxCellText" class="settings-input" value="200" min="50" max="5000" step="50">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">属性预览条数</label>
+          <input type="number" id="chainPreviewLimit" class="settings-input" value="3" min="1" max="20" step="1">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">采集字段上限</label>
+          <input type="number" id="collectMaxFields" class="settings-input" value="30" min="1" max="100" step="1">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">网络拦截全部上限</label>
+          <input type="number" id="networkMaxAll" class="settings-input" value="100" min="10" max="500" step="10">
+        </div>
+      </div>
+      <div data-section="DOM 树">
+        <div class="settings-group">
+          <label class="settings-label">DOM 树深度</label>
+          <input type="number" id="maxDomDepth" class="settings-input" value="20" min="5" max="50">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">每节点最多子元素</label>
+          <input type="number" id="maxDomChildren" class="settings-input" value="200" min="20" max="2000" step="20">
+        </div>
+      </div>
+      <div data-section="合并 / 拆分">
+        <div class="settings-group">
+          <label class="settings-label">内联合并分隔符</label>
+          <input type="text" id="inlineMergeDelim" class="settings-input" value="" placeholder="无（直接拼接）">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">拆分递归深度</label>
+          <input type="number" id="splitMaxDepth" class="settings-input" value="4" min="1" max="10" step="1">
+        </div>
+      </div>
+      <div data-section="外观 / 代理">
+        <div class="stealth-section-label">主题切换</div>
+        <div class="settings-group">
+          <label class="settings-label" title="切换暗色/亮色主题">亮色主题</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="themeToggleSwitch">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="stealth-section-label" style="margin-top:12px;">代理配置（HTTP/SOCKS5）</div>
+        <div class="stealth-desc">设置代理后所有网络请求通过代理服务器，用于绕过 IP 风控。</div>
+        <div class="settings-group">
+          <label class="settings-label">协议</label>
+          <select id="proxyProtocol" class="settings-input" style="width:100px">
+            <option value="http">HTTP</option>
+            <option value="https">HTTPS</option>
+            <option value="socks5">SOCKS5</option>
+          </select>
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">主机地址</label>
+          <input type="text" id="proxyHost" class="settings-input" placeholder="127.0.0.1">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label">端口</label>
+          <input type="number" id="proxyPort" class="settings-input" placeholder="1080" min="1" max="65535">
+        </div>
+        <div class="settings-group" style="gap:6px;padding-top:6px">
+          <button id="btnProxyApply" class="btn btn-sm btn-accent">应用代理</button>
+          <button id="btnProxyClear" class="btn btn-sm">清除代理</button>
+        </div>
+      </div>
+      <div data-section="反爬脚本">
+        <div class="stealth-desc">勾选要启用的反爬脚本，页面下次加载时生效。</div>
+        <div class="stealth-section-label">默认配置（所有站点）</div>
+        <div class="stealth-scripts" id="stealthDefaultScripts">
+          <!-- JS 动态生成 -->
+        </div>
+        <div class="stealth-section-label" style="margin-top:12px;">域名专属配置 <span class="stealth-hint">（覆盖默认配置）</span></div>
+        <div class="stealth-domain-add">
+          <input type="text" id="stealthDomainInput" class="settings-input" style="flex:1;width:auto" placeholder="例如 taobao.com">
+          <button id="btnStealthAddDomain" class="btn btn-sm btn-accent">添加</button>
+        </div>
+        <div id="stealthDomains" class="stealth-domains">
+          <!-- JS 动态生成 -->
+        </div>
+      </div>
+      <div data-section="行为模拟">
+        <div class="stealth-desc">自动采集时模拟真人操作行为，降低被检测的风险。</div>
+        <div class="settings-group">
+          <label class="settings-label" title="是否启用行为模拟">启用行为模拟</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="behaveEnable" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="stealth-section-label">滚动行为</div>
+        <div class="settings-group">
+          <label class="settings-label" title="每次滚动步长的随机浮动范围">滚动随机偏差 (%)</label>
+          <input type="number" id="behaveJitter" class="settings-input" value="20" min="0" max="50" step="5">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" title="滚动过程中随机停顿的概率">中途停顿概率 (%)</label>
+          <input type="number" id="behavePauseChance" class="settings-input" value="30" min="0" max="100" step="5">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" title="停顿最短时间">停顿最短 (ms)</label>
+          <input type="number" id="behavePauseMin" class="settings-input" value="200" min="50" max="2000" step="50">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" title="停顿最长时间">停顿最长 (ms)</label>
+          <input type="number" id="behavePauseMax" class="settings-input" value="800" min="100" max="3000" step="50">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" title="到底后额外等待的时间，模拟阅读">底部阅读停顿 (ms)</label>
+          <input type="number" id="behaveReadPause" class="settings-input" value="1500" min="0" max="5000" step="100">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" title="往下滚后随机往回滚一点的概率">回滚概率 (%)</label>
+          <input type="number" id="behaveBackChance" class="settings-input" value="10" min="0" max="50" step="5">
+        </div>
+        <div class="stealth-section-label" style="margin-top:8px;">鼠标行为</div>
+        <div class="settings-group">
+          <label class="settings-label" title="滚动时随机移动到可见元素的概率">元素悬停概率 (%)</label>
+          <input type="number" id="behaveHoverChance" class="settings-input" value="20" min="0" max="100" step="5">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" title="鼠标悬停最短时间">悬停最短 (ms)</label>
+          <input type="number" id="behaveHoverMin" class="settings-input" value="300" min="50" max="2000" step="50">
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" title="鼠标悬停最长时间">悬停最长 (ms)</label>
+          <input type="number" id="behaveHoverMax" class="settings-input" value="1200" min="100" max="5000" step="50">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="btnSettingsClose" class="btn btn-sm btn-accent">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast 提示 -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="modules/state.js"></script>
+<script src="modules/utils.js"></script>
+<script src="modules/batch.js"></script>
+<script src="modules/query-engine.js"></script>
+<script src="modules/element-extractor.js"></script>
+
+<script src="app.js"></script>
+</body>
+</html>

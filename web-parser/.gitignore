@@ -1,0 +1,37 @@
+node_modules/
+dist/
+__pycache__/
+python/__pycache__/
+python/parser/__pycache__/
+python/cookies/
+python/python-backend.exe
+*.pyc
+.DS_Store
+python/build/
+
+# Electron 运行时数据（缓存、Cookie、本地存储等）
+data/
+temp/
+logs/
+crash/
+
+# Python 运行时数据
+python/data/
+python/dist/
+python/build/
+python/python-backend/_internal/
+python/wheels/
+
+# 打包产物
+python/python-backend.exe
+python/python-backend/
+
+# 备份文件
+*.tar.gz
+*.backup
+web-parser-backup-*/
+~$*
+
+# IDE
+.vscode/
+.idea/

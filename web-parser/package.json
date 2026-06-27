@@ -1,0 +1,50 @@
+{
+  "name": "web-parser",
+  "version": "1.0.0",
+  "description": "网页源码解析器 - 可视化提取网页数据并导出Excel",
+  "author": "WebParser",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron.cmd .",
+    "build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.webparser.app",
+    "productName": "WebParser",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "webview-preload.js",
+      "tab-browser-preload.js",
+      "renderer/**/*",
+      "tab-browser.html",
+      "tab-browser.css",
+      "tab-browser.js",
+      "python/**/*",
+      "!python/dist",
+      "!python/build",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "python",
+        "to": "python",
+        "filter": ["**/*", "!dist/**", "!build/**", "!__pycache__/**", "!*.spec"]
+      }
+    ],
+    "win": {
+      "target": "portable",
+      "icon": null
+    },
+    "portable": {
+      "artifactName": "WebParser_${version}.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^42.0.1",
+    "electron-builder": "latest"
+  }
+}

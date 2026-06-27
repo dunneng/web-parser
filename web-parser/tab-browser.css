@@ -1,0 +1,106 @@
+/* ──────── 全局 ──────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #1e1e2e;
+  --bg-card: #2a2a3d;
+  --bg-input: #2a2a3d;
+  --bg-hover: #313145;
+  --text: #e0e0e0;
+  --text-dim: #8888a0;
+  --text-bright: #ffffff;
+  --accent: #7c5cfc;
+  --accent-dim: rgba(124, 92, 252, 0.15);
+  --green: #4ade80;
+  --red: #f87171;
+  --border: #3a3a50;
+  --radius: 6px;
+}
+
+body.theme-light {
+  --bg: #f0f2f5;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: #e8eaed;
+  --text: #1c1e21;
+  --text-dim: #65676b;
+  --text-bright: #000000;
+  --accent: #6c5ce7;
+  --accent-dim: rgba(108, 92, 231, 0.1);
+  --border: #dadde1;
+}
+
+html, body {
+  height: 100%; overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+  display: flex; flex-direction: column;
+}
+
+/* ──────── 工具栏 ──────── */
+.tb-toolbar {
+  height: 42px; min-height: 42px; display: flex; align-items: center;
+  gap: 4px; padding: 0 8px;
+  background: var(--bg-card); border-bottom: 1px solid var(--border);
+}
+.tb-btn {
+  width: 30px; height: 28px; border: 1px solid var(--border); border-radius: 4px;
+  background: var(--bg-input); color: var(--text); cursor: pointer;
+  font-size: 14px; display: inline-flex; align-items: center; justify-content: center;
+  transition: all 0.15s; flex-shrink: 0;
+}
+.tb-btn:hover { background: var(--bg-hover); border-color: var(--accent); }
+.tb-url-input {
+  flex: 1; height: 28px; padding: 0 10px;
+  background: var(--bg-input); color: var(--text); border: 1px solid var(--border);
+  border-radius: 4px; font-size: 12px; outline: none;
+}
+.tb-url-input:focus { border-color: var(--accent); }
+
+/* ──────── Tab 标签栏 ──────── */
+.tb-tabbar {
+  height: 32px; min-height: 32px; display: flex; align-items: flex-end;
+  gap: 1px; padding: 0 4px; overflow-x: auto;
+  background: var(--bg); border-bottom: 1px solid var(--border);
+}
+.tb-tabbar::-webkit-scrollbar { height: 2px; }
+.tb-tabbar::-webkit-scrollbar-thumb { background: #444; border-radius: 1px; }
+
+.tb-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; height: 28px; cursor: pointer; user-select: none;
+  border-radius: 5px 5px 0 0; font-size: 11px; white-space: nowrap;
+  max-width: 180px; flex-shrink: 0;
+  background: var(--bg-card); color: var(--text-dim);
+  border: 1px solid var(--border); border-bottom: none;
+  transition: all 0.15s;
+}
+.tb-tab:hover { background: var(--bg-hover); }
+.tb-tab.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+.tb-tab .tb-tab-title {
+  overflow: hidden; text-overflow: ellipsis; max-width: 120px;
+}
+.tb-tab .tb-tab-close {
+  width: 16px; height: 16px; line-height: 16px; text-align: center;
+  font-size: 14px; border-radius: 3px; opacity: 0.6;
+}
+.tb-tab .tb-tab-close:hover { background: rgba(255,255,255,0.15); opacity: 1; color: var(--red); }
+.tb-tab .tb-tab-loading {
+  width: 10px; height: 10px; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: tb-spin 0.6s linear infinite;
+}
+@keyframes tb-spin { to { transform: rotate(360deg); } }
+
+/* ──────── Webview 区域 ──────── */
+.tb-webviews {
+  flex: 1; position: relative; background: #fff; overflow: hidden;
+}
+.tb-webviews webview {
+  position: absolute; top:0; left:0; right:0; bottom:0;
+  display: none;
+}
+.tb-webviews webview.active {
+  display: flex;
+}

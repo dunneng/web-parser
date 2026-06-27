@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>去背景搜图 — 以图搜同款</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --card: #1a1d27;
+  --border: #2a2d3a;
+  --text: #e4e6f0;
+  --muted: #8890a8;
+  --accent: #6c8cff;
+  --accent-hover: #8aa4ff;
+  --green: #4ade80;
+  --red: #f87171;
+  --radius: 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 32px 24px;
+}
+
+.container { max-width: 960px; margin: 0 auto; }
+
+h1 {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.subtitle { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+
+/* ── 上传区 ── */
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  margin-bottom: 20px;
+}
+.dropzone:hover, .dropzone.drag-over {
+  border-color: var(--accent);
+  background: rgba(108,140,255,0.04);
+}
+.dropzone-icon { font-size: 36px; margin-bottom: 12px; }
+.dropzone-text { color: var(--muted); font-size: 14px; }
+.dropzone-text strong { color: var(--accent); }
+
+/* ── 进度条 ── */
+.loading {
+  display: none;
+  text-align: center;
+  padding: 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.loading.active { display: block; }
+.spinner {
+  display: inline-block;
+  width: 20px; height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 预览区 ── */
+.preview { display: none; margin-bottom: 24px; }
+.preview.active { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+.preview-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.preview-label {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.preview-label .badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(108,140,255,0.12);
+  color: var(--accent);
+}
+.preview-img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: #fff;
+  padding: 12px;
+}
+
+/* ── 搜索按钮 ── */
+.search-bar {
+  display: none;
+  text-align: center;
+  margin-bottom: 28px;
+}
+.search-bar.active { display: block; }
+.btn-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 32px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .2s;
+}
+.btn-search:hover { background: var(--accent-hover); }
+.btn-search:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+/* ── 结果区 ── */
+.results { display: none; }
+.results.active { display: block; }
+.results-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 14px;
+}
+.results-header h2 { font-size: 16px; font-weight: 600; }
+.results-count { color: var(--muted); font-size: 13px; }
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.result-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color .2s, transform .15s;
+}
+.result-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.result-img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: #fff;
+  padding: 8px;
+}
+.result-info { padding: 10px 12px; }
+.result-title {
+  font-size: 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.result-meta {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.result-price { color: var(--red); font-weight: 700; font-size: 14px; }
+.result-platform {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+}
+.result-score {
+  font-size: 10px;
+  color: var(--green);
+  margin-top: 4px;
+}
+.no-results {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.error-msg {
+  text-align: center;
+  padding: 16px;
+  color: var(--red);
+  font-size: 13px;
+  background: rgba(248,113,113,0.06);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  display: none;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🔍 去背景搜同款</h1>
+  <p class="subtitle">上传商品图 → AI 一键去背景 → 向量匹配同款商品</p>
+
+  <!-- 上传区 -->
+  <div class="dropzone" id="dropzone">
+    <div class="dropzone-icon">🖼️</div>
+    <div class="dropzone-text">拖放图片到此处，或 <strong>点击上传</strong></div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none">
+  </div>
+
+  <!-- 加载 -->
+  <div class="loading" id="loading">
+    <span class="spinner"></span>正在去背景…
+  </div>
+
+  <!-- 错误 -->
+  <div class="error-msg" id="error"></div>
+
+  <!-- 预览 -->
+  <div class="preview" id="preview">
+    <div class="preview-card">
+      <div class="preview-label">📷 原图</div>
+      <img class="preview-img" id="previewOrig" alt="原图">
+    </div>
+    <div class="preview-card">
+      <div class="preview-label">
+        ✨ 去背景
+        <span class="badge">U²-Net</span>
+      </div>
+      <img class="preview-img" id="previewProc" alt="去背景">
+    </div>
+  </div>
+
+  <!-- 搜索按钮 -->
+  <div class="search-bar" id="searchBar">
+    <button class="btn-search" id="btnSearch" onclick="doSearch()">
+      🔎 以图搜同款
+    </button>
+  </div>
+
+  <!-- 搜索结果 -->
+  <div class="results" id="results">
+    <div class="results-header">
+      <h2>搜索结果</h2>
+      <span class="results-count" id="resultsCount"></span>
+    </div>
+    <div class="results-grid" id="resultsGrid"></div>
+  </div>
+</div>
+
+<script>
+const API = 'http://127.0.0.1:19527';
+let currentFile = null;
+
+// ── 上传 ──
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+
+dropzone.onclick = () => fileInput.click();
+fileInput.onchange = e => { if (e.target.files[0]) handleFile(e.target.files[0]); };
+
+dropzone.ondragover = e => { e.preventDefault(); dropzone.classList.add('drag-over'); };
+dropzone.ondragleave = () => dropzone.classList.remove('drag-over');
+dropzone.ondrop = e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+};
+
+async function handleFile(file) {
+  if (!file.type.startsWith('image/')) return;
+  currentFile = file;
+  document.getElementById('error').style.display = 'none';
+  document.getElementById('results').classList.remove('active');
+  document.getElementById('searchBar').classList.remove('active');
+
+  // 立即显示原图预览
+  const origUrl = URL.createObjectURL(file);
+  document.getElementById('previewOrig').src = origUrl;
+  document.getElementById('preview').classList.add('active');
+
+  // 去背景
+  document.getElementById('loading').classList.add('active');
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const resp = await fetch(API + '/api/bg-remove/preview', { method: 'POST', body: form });
+    const data = await resp.json();
+    if (data.ok) {
+      document.getElementById('previewProc').src = data.processed;
+      document.getElementById('searchBar').classList.add('active');
+    } else {
+      showError(data.error || '去背景失败');
+    }
+  } catch (e) {
+    showError('连接失败: ' + e.message);
+  } finally {
+    document.getElementById('loading').classList.remove('active');
+  }
+}
+
+// ── 搜索 ──
+async function doSearch() {
+  if (!currentFile) return;
+  const btn = document.getElementById('btnSearch');
+  btn.disabled = true;
+  btn.textContent = '⏳ 搜索中…';
+  document.getElementById('error').style.display = 'none';
+  document.getElementById('results').classList.remove('active');
+
+  try {
+    const form = new FormData();
+    form.append('file', currentFile);
+    form.append('top_k', '20');
+    const resp = await fetch(API + '/api/bg-remove/search', { method: 'POST', body: form });
+    const data = await resp.json();
+    if (data.ok) {
+      renderResults(data.results);
+    } else {
+      showError(data.error || '搜索失败');
+    }
+  } catch (e) {
+    showError('搜索失败: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔎 以图搜同款';
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function renderResults(items) {
+  const grid = document.getElementById('resultsGrid');
+  const count = document.getElementById('resultsCount');
+  const section = document.getElementById('results');
+
+  if (!items || items.length === 0) {
+    grid.innerHTML = '<div class="no-results">📭 未找到匹配商品<br><span style="font-size:12px;color:var(--muted)">试试先入库一些商品再搜索</span></div>';
+    count.textContent = '';
+    section.classList.add('active');
+    return;
+  }
+
+  count.textContent = `共 ${items.length} 个结果`;
+  grid.innerHTML = items.map(p => {
+    let imgHtml = '';
+    if (p.local_image) {
+      const pid = p.id || p.product_id;
+      imgHtml = `<img class="result-img" src="${API}/api/price-compare/image/${pid}" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22><rect fill=%22%23eee%22 width=%22200%22 height=%22200%22/><text x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-size=%2214%22>无图片</text></svg>'">`;
+    } else if (p.main_image_url) {
+      imgHtml = `<img class="result-img" src="${p.main_image_url}" loading="lazy" onerror="this.style.display='none'">`;
+    }
+    const price = p.price ? '¥' + Number(p.price).toFixed(2) : '';
+    const platform = p.platform || '';
+    const score = p.score ? '匹配度 ' + (p.score * 100).toFixed(0) + '%' : '';
+    const skuInfo = p.matched_sku_color ? ` [${p.matched_sku_color}${p.matched_sku_size ? '/'+p.matched_sku_size : ''}]` : '';
+    return `
+      <div class="result-card" onclick="window.open('${escapeHtml(p.platform_url || '#')}', '_blank')">
+        ${imgHtml}
+        <div class="result-info">
+          <div class="result-title">${escapeHtml(p.title || '无标题')}${skuInfo}</div>
+          <div class="result-meta">
+            <span class="result-price">${price}</span>
+            <span class="result-platform">${platform}</span>
+          </div>
+          ${score ? `<div class="result-score">${score}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  section.classList.add('active');
+}
+
+function escapeHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
