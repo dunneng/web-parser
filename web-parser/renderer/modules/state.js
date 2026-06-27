@@ -18,7 +18,7 @@ window.Parser.state = {
   _scrollDataCount: 0,
   _apiDataCount: 0,
 
-  // 反爬/辅助
+  // Stealth/辅助
   _antidetectOn: false,
   _domPersistOn: false,
   _apiListenOn: false,
@@ -73,7 +73,7 @@ window.Parser.state = {
   clipboardHistory: [],
   CLIPBOARD_MAX: 50,
 
-  // 反爬脚本
+  // Stealth 脚本
   STEALTH_SCRIPTS: [],    // 由 app.js 初始化
   STEALTH_INJECT_IDS: [],
   _stealthData: null,

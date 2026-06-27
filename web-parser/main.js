@@ -396,7 +396,7 @@ function createWindow() {
             { label: 'DOM 树', click: () => mainWindow?.webContents.send('menu:settings', 'DOM 树') },
             { label: '合并 / 拆分', click: () => mainWindow?.webContents.send('menu:settings', '合并 / 拆分') },
             { label: '外观 / 代理', click: () => mainWindow?.webContents.send('menu:settings', '外观 / 代理') },
-            { label: '反爬脚本', click: () => mainWindow?.webContents.send('menu:settings', '反爬脚本') },
+            { label: 'Stealth 设置', click: () => mainWindow?.webContents.send('menu:settings', 'Stealth 设置') },
             { label: '行为模拟', click: () => mainWindow?.webContents.send('menu:settings', '行为模拟') },
           ],
         },
@@ -777,7 +777,7 @@ ipcMain.handle('api:captured-urls', async () => {
   return _apiCapturedUrls.slice();
 });
 
-// ── 反爬/辅助开关（原菜单项，现由配置弹窗控制）──
+// ── Stealth/辅助开关（原菜单项，现由配置弹窗控制）──
 
 let _antidetectOn = false;
 ipcMain.handle('antidetect:toggle', async () => {
@@ -878,7 +878,7 @@ ipcMain.handle('webview:preload-path', () => {
 
 // ──────── CDP 脚本预注入 ────────
 // 使用 Chrome DevTools Protocol 的 addScriptToEvaluateOnNewDocument
-// 在每次页面加载、任何页面脚本执行之前注入反爬代码
+// 在每次页面加载、任何页面脚本执行之前注入 stealth 代码
 
 ipcMain.handle('stealth:inject-cdp', async (event, { webContentsId, script }) => {
   try {
@@ -908,7 +908,7 @@ ipcMain.handle('stealth:inject-cdp', async (event, { webContentsId, script }) =>
       source: script,
     });
 
-    console.log('[CDP] 反爬脚本已预注入, id=' + webContentsId + ' len=' + script.length);
+    console.log('[CDP] stealth 脚本已预注入, id=' + webContentsId + ' len=' + script.length);
 
     // 不 detach 调试器，保持脚本持久化
     return { ok: true };

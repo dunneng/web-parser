@@ -967,7 +967,7 @@ window.Parser = window.Parser || {};
               await sleep(parseInt($('#batchInterval').value) || 500);
             }
 
-            // ── 反爬重注入：SPA 异步渲染完成后强制再包装原型 ──
+            // ── stealth 重注入：SPA 异步渲染完成后强制再包装原型 ──
             try {
               var reUrl = document.getElementById("webview").getURL();
               var reHost = (reUrl && reUrl !== 'about:blank')
@@ -1202,7 +1202,7 @@ window.Parser = window.Parser || {};
           realUrl = document.getElementById("webview").getURL();
           console.log('[batchLoadAll] 重试后 URL:', realUrl);
         }
-        // ── 反爬重注入：SPA 异步渲染完成后强制再包装原型 ──
+        // ── stealth 重注入：SPA 异步渲染完成后强制再包装原型 ──
         try {
           var reUrl2 = document.getElementById("webview").getURL();
           var reHost2 = (reUrl2 && reUrl2 !== 'about:blank')
