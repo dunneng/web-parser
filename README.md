@@ -109,13 +109,16 @@ npm install
 
 # 3. 安装 Python 依赖
 cd python
-pip install -r requirements.txt
+pip install -r requirements.txt    # Mac/Linux 用 pip3
 
 # 4. 启动
 npx electron .
 ```
 
-> 💡 Windows 用户也可以直接运行 `清除进程.bat` 一键重启
+| 平台 | 一键重启 |
+|------|---------|
+| Windows | 双击 `清除进程.bat` |
+| macOS / Linux | `bash 清除进程.sh`
 
 ### Python 依赖
 
