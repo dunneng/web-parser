@@ -26,13 +26,20 @@
       "python/**/*",
       "!python/dist",
       "!python/build",
+      "!python/__pycache__",
+      "!python/python-backend/_internal",
+      "!python/data",
+      "!python/cookies",
+      "!python/models",
+      "!python/wheels",
+      "!python/static",
       "node_modules/**/*"
     ],
     "extraResources": [
       {
         "from": "python",
         "to": "python",
-        "filter": ["**/*", "!dist/**", "!build/**", "!__pycache__/**", "!*.spec"]
+        "filter": ["**/*", "!dist/**", "!build/**", "!__pycache__/**", "!data/**", "!cookies/**", "!models/**", "!wheels/**", "!static/**", "!python-backend/_internal/**", "!*.spec"]
       }
     ],
     "win": {
