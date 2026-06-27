@@ -1,20 +1,44 @@
+# Electron 缓存数据
 web-parser/data/
 web-parser/temp/
 web-parser/logs/
 web-parser/crash/
+
+# Python 运行时数据
 web-parser/python/data/
-web-parser/python/python-backend.exe
 web-parser/python/dist/
 web-parser/python/build/
+web-parser/python/models/
+web-parser/python/static/
+
+# 打包产物
+web-parser/python/python-backend.exe
+web-parser/python/python-backend.exe.bak
+web-parser/python/python-backend/
+web-parser/python/wheels/
+
+# 备份
 web-parser-backup-*.tar.gz
 web-parser-backup-*/
-web-parser/python/python-backend.exe.bak
-web-parser/python/models/
-web-parser/python/data/qdrant_storage*/
-web-parser/python/data/images/
-~$*
-
+web-parser-full-backup/
+*.tar.gz
 *.bundle
-.git.old/
 
+# 临时/测试文件
+test-*.html
+test-*.js
+test-*.py
+_fix_*.py
+IDEA.md
+web-parser/_refactor_*.py
+web-parser/*.backup
+web-parser/python/test_*.spec
+
+# 反检测计划（敏感）
+.claude/
+anti-detection*
+test-stealth*
+
+# IDE / 系统
+~$*
 .git.old/
