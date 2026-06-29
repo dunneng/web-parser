@@ -38,6 +38,65 @@ function isPythonPortInUse() {
   });
 }
 
+function findPython() {
+  // 优先查找系统 Python
+  const candidates = process.platform === 'win32'
+    ? ['python', 'python3', 'py', 'C:\\Python314\\python.exe', 'C:\\Python313\\python.exe', 'C:\\Python312\\python.exe', 'C:\\Python311\\python.exe']
+    : ['python3', 'python'];
+  for (const cmd of candidates) {
+    try {
+      const result = require('child_process').spawnSync(cmd, ['--version'], { timeout: 5000 });
+      if (result.status === 0) return cmd;
+    } catch (e) {}
+  }
+  return null;
+}
+
+function ensurePythonDeps(pythonCmd) {
+  return new Promise((resolve, reject) => {
+    const reqPath = path.join(__dirname, 'python', 'requirements.txt');
+    console.log('[Python] 检查依赖...');
+    const check = spawn(pythonCmd, ['-c', 'import fastapi'], { timeout: 10000 });
+    check.on('close', (code) => {
+      if (code === 0) {
+        console.log('[Python] 依赖已就绪');
+        resolve();
+        return;
+      }
+      console.log('[Python] 正在安装依赖 (pip install -r requirements.txt)...');
+      if (mainWindow) mainWindow.webContents.send('status', '正在安装 Python 依赖，首次启动需联网...');
+      const pip = spawn(pythonCmd, ['-m', 'pip', 'install', '-r', reqPath, '--quiet'], {
+        cwd: path.join(__dirname, 'python'),
+      });
+      pip.stderr.on('data', (d) => {
+        const msg = d.toString().trim();
+        if (msg) console.log('[pip]', msg);
+      });
+      pip.on('close', (pipCode) => {
+        if (pipCode === 0) {
+          console.log('[Python] 依赖安装完成');
+          resolve();
+        } else {
+          reject(new Error('pip install 失败，请手动执行: pip install -r requirements.txt'));
+        }
+      });
+      pip.on('error', reject);
+    });
+    check.on('error', () => {
+      // spawnSync failed, try running pip anyway
+      console.log('[Python] 无法检测依赖，尝试直接安装...');
+      const pip = spawn(pythonCmd, ['-m', 'pip', 'install', '-r', reqPath, '--quiet'], {
+        cwd: path.join(__dirname, 'python'),
+      });
+      pip.on('close', (pipCode) => {
+        if (pipCode === 0) resolve();
+        else reject(new Error('pip install 失败'));
+      });
+      pip.on('error', reject);
+    });
+  });
+}
+
 async function startPythonBackend() {
   // 检查是否已有后端实例在运行，避免重复启动导致端口冲突崩溃
   const portInUse = await isPythonPortInUse();
@@ -76,10 +135,22 @@ async function startPythonBackend() {
       env: { ...process.env },
     });
   } else {
-    console.log('[Python] 使用源码 python server.py');
-    const pythonCmd = process.platform === 'win32'
-      ? (fs.existsSync('C:\\Python314\\python.exe') ? 'C:\\Python314\\python.exe' : 'python')
-      : 'python3';
+    // 无预打包后端，自动寻找 Python 并安装依赖
+    console.log('[Python] 未找到预打包后端，寻找系统 Python...');
+    const pythonCmd = findPython();
+    if (!pythonCmd) {
+      console.error('[Python] 未找到 Python，请安装 Python 3.11+ 并添加到 PATH');
+      if (mainWindow) mainWindow.webContents.send('status', '❌ 未找到 Python，请安装 Python 3.11+');
+      return;
+    }
+    console.log('[Python] 找到: ' + pythonCmd);
+    try {
+      await ensurePythonDeps(pythonCmd);
+    } catch (err) {
+      console.error('[Python] 依赖安装失败:', err.message);
+      if (mainWindow) mainWindow.webContents.send('status', '❌ ' + err.message);
+      return;
+    }
     pythonProcess = spawn(pythonCmd, [serverPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: path.join(__dirname, 'python'),
