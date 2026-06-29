@@ -553,9 +553,6 @@
           <label class="radio-label"><input type="radio" name="batchExtractModeDlg" value="selector"> 选择器</label>
           <button id="btnBatchAddSelector" class="btn btn-sm" style="height:24px;padding:0 8px;font-size:11px;margin-left:8px">+ 添加</button>
         </div>
-        <div style="margin-bottom:4px">
-          <label class="radio-label"><input type="radio" name="batchExtractModeDlg" value="chain"> 链路</label>
-        </div>
         <div id="batchSelectorRows" style="display:flex;flex-direction:column;gap:4px">
           <div class="batch-selector-row" style="display:flex;align-items:center;gap:4px">
             <input type="text" class="form-input batch-dlg-selector" placeholder="提取模式下选元素自动填入" style="flex:1;height:28px;padding:0 8px;font-size:12px">
@@ -929,7 +926,7 @@
           </label>
         </div>
         <div class="stealth-section-label" style="margin-top:12px;">代理配置（HTTP/SOCKS5）</div>
-        <div class="stealth-desc">设置代理后所有网络请求通过代理服务器，用于绕过 IP 风控。</div>
+        <div class="stealth-desc">设置代理后所有网络请求通过代理服务器。</div>
         <div class="settings-group">
           <label class="settings-label">协议</label>
           <select id="proxyProtocol" class="settings-input" style="width:100px">

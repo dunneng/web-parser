@@ -98,7 +98,7 @@ window._editorCollapseAll = function() {
     { id: 'canvas', label: 'Canvas 指纹加噪', desc: 'toDataURL/getImageData 加微量噪声', defaultOn: true },
     { id: 'webgl', label: 'WebGL 指纹统一', desc: '统一渲染器和供应商字符串', defaultOn: true },
     { id: 'webrtc', label: 'WebRTC 屏蔽', desc: '禁用 RTCPeerConnection，防内网 IP 泄漏', defaultOn: true },
-    { id: 'cdp', label: 'CDP 变量清理', desc: '删除 __webdriver/cdc_ 等自动化残留', defaultOn: true },
+    { id: 'cdp', label: 'CDP 变量清理', desc: '清理 CDP 调试残留变量', defaultOn: true },
     { id: 'navigator', label: 'Navigator 属性补全', desc: '统一 platform/vendor/deviceMemory 等', defaultOn: true },
     { id: 'audio', label: 'Audio 指纹加噪', desc: 'AudioContext 振荡器频率微调', defaultOn: false },
     { id: 'font', label: '字体枚举限制', desc: '限制 measureText 精度 + 屏蔽 queryLocalFonts', defaultOn: false },
@@ -6812,7 +6812,7 @@ window._editorCollapseAll = function() {
     var childDelimiter = Parser.state.globalChildDelim;
     var fieldsJson = JSON.stringify(fields);
 
-    // 完整内联提取引擎，绕过 contextIsolation 限制
+    // 完整内联提取引擎，适配 contextIsolation 环境
     var jsCode =
       '(function(){' +
         'function cleanText(s){' +

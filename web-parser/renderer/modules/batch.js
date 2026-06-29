@@ -1216,7 +1216,7 @@ window.Parser = window.Parser || {};
         } catch(e) {}
         S.currentHtml = await document.getElementById("webview").executeJavaScript('document.documentElement.outerHTML');
         if (S.currentHtml) {
-          // ── 多级风控检测 ──
+          // ── 多级状态检测 ──
           if (!/^local-html:\/\//i.test(t.url)) {
             var risk = detectRiskSignals(S.currentHtml, 0, (cnCurrentUrl||t.url), t.url);
             if (risk.level === 'blocked') {
@@ -1245,10 +1245,10 @@ window.Parser = window.Parser || {};
             if (risk.level === 'suspicious') {
               t._susCount = (t._susCount || 0) + 1;
               if (t._susCount >= 3) {
-                t.status = 'verify'; t.error = '连续疑似被风控: ' + risk.reason;
+                t.status = 'verify'; t.error = '连续访问受限: ' + risk.reason;
                 S.batchLoadPaused = true;
                 renderBatchTags();
-                setStatus('⚠️ 连续风控信号 — 已暂停');
+                setStatus('⚠️ 连续访问受限 — 已暂停');
                 break;
               }
               setStatus('⚠️ ' + risk.reason + ' (' + t._susCount + '/3)，递增等待...');
@@ -1562,7 +1562,7 @@ window.Parser = window.Parser || {};
     });
   }
 
-  // ── 扩展风控检测（替换原 detectCaptcha）──
+  // ── 扩展状态检测（替换原 detectCaptcha）──
   function detectRiskSignals(html, statusCode, url, taskUrl) {
     var lower = (html || '').toLowerCase();
     var len = (html || '').length;
@@ -1589,9 +1589,9 @@ window.Parser = window.Parser || {};
         return {level:'redirected', reason:'重定向到登录:'+url, action:'pause'};
       }
     }
-    // 阿里系风控标记
+    // 访问限制标记
     if (lower.indexOf('_s_n_c')!==-1||lower.indexOf('uac-rsk')!==-1) {
-      return {level:'suspicious', reason:'阿里风控标记', action:'retry_with_delay'};
+      return {level:'suspicious', reason:'访问限制标记', action:'retry_with_delay'};
     }
     return {level:'safe', reason:'', action:'continue'};
   }

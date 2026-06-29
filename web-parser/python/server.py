@@ -120,7 +120,7 @@ async def get_product_image(product_id: int):
         mime, _ = mimetypes.guess_type(local_image)
         return FileResponse(local_image, media_type=mime or "image/jpeg")
 
-    # 无本地图片：代理远程主图（绕过 CDN 防盗链）
+    # 无本地图片：代理远程主图
     remote = product.get("main_image_url", "")
     if remote:
         return _proxy_remote_image(remote)
@@ -165,7 +165,7 @@ def _resolve_image_path(platform: str, product_id: int, index: int) -> str | Non
         return str(base / f"{product_id}_{index}.jpg")
 
 def _proxy_remote_image(url: str) -> Response:
-    """代理下载远程图片，复用 proxy-image 缓存逻辑，绕过 CDN 防盗链"""
+    """代理下载远程图片，复用 proxy-image 缓存逻辑"""
     cache_key = hashlib.sha256(url.encode()).hexdigest()
     with _proxy_cache_lock:
         if cache_key in _proxy_cache:
@@ -315,7 +315,7 @@ async def reorder_product_images(product_id: int, body: ReorderBody):
     db.update_product(product_id, main_image_url=new_main, image_urls=new_extras)
     return {"ok": True}
 
-# ── 图片代理：绕过 CDN 防盗链 ──
+# ── 图片代理 ──
 import requests
 import hashlib
 import tempfile
@@ -337,7 +337,7 @@ def _proxy_cleanup():
 
 @app.get("/api/price-compare/proxy-image")
 async def proxy_image(url: str):
-    """代理下载远程图片，绕过 CDN Referer 防盗链"""
+    """代理下载远程图片"""
     if not url or not (url.startswith("http://") or url.startswith("https://")):
         raise HTTPException(status_code=400, detail="无效的图片 URL")
 

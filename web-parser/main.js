@@ -7,7 +7,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const net = require('net');
 
-// 移除 Chromium 自动化标记（防止 navigator.webdriver = true 暴露机器人身份）
+// 移除 Chromium 自动化标记（确保浏览器环境正常）
 app.commandLine.appendSwitch('disable-features', 'AutomationControlled');
 
 let mainWindow;
@@ -298,7 +298,7 @@ function setupApiUrlCapture() {
   }
 }
 
-// ──────── 请求头伪装（补全浏览器标准头，防止被识别为爬虫）────────
+// ──────── 请求头伪装（补全浏览器标准头）────────
 
 function setupRequestHeaders() {
   try {

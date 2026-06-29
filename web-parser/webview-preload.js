@@ -46,7 +46,7 @@
       });
     } catch (e) {}
 
-    // 2. 伪造 window.chrome 对象
+    // 2. 模拟 window.chrome 对象
     if (!window.chrome) {
       window.chrome = { app: {}, csi: function () {}, loadTimes: function () {}, runtime: {} };
     } else {
@@ -66,7 +66,7 @@
       } catch (e) {}
     }
 
-    // 4. 伪造 plugins / mimeTypes
+    // 4. 模拟 plugins / mimeTypes
     var pluginsAreEmpty = false;
     try { pluginsAreEmpty = !navigator.plugins || navigator.plugins.length === 0; } catch (e) { pluginsAreEmpty = true; }
     if (pluginsAreEmpty) {
