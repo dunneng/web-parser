@@ -30,7 +30,7 @@
     }
     function _log(name, msg) {
       if (isEnabled(name)) {
-        try { console.debug('[反爬] ' + name + ': ' + (msg || '已启用')); } catch (e) {}
+        try { console.debug('[stealth] ' + name + ': ' + (msg || '已启用')); } catch (e) {}
       }
     }
 
@@ -107,7 +107,7 @@
     } catch (e) {}
 
     // ════════════════════════════════
-    //  高级对抗脚本 —— 通过 CDP Page.addScriptToEvaluateOnNewDocument 注入
+    //  高级伪装 —— 通过 CDP Page.addScriptToEvaluateOnNewDocument 注入
     //  见 main.js stealth:inject-cdp 和 app.js setupCdpStealthInjection
     // ════════════════════════════════
 

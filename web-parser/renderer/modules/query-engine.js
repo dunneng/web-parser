@@ -220,7 +220,7 @@ window.Parser = window.Parser || {};
       }
     })();
 
-    // ── 反爬脚本设置 ──
+    // ── Stealth 脚本设置 ──
     loadStealthConfig();
     renderStealthUI();
     bindStealthEvents();
@@ -230,7 +230,7 @@ window.Parser = window.Parser || {};
     bindBehaveEvents();
   }
 
-  // ── 反爬脚本：配置管理 ──
+  // ── Stealth 脚本：配置管理 ──
   // ── 行为模拟：配置管理 ──
   function loadBehaveConfig() {
     try { var raw = localStorage.getItem('behave_config'); var d = raw ? JSON.parse(raw) : {}; } catch(e) { d = {}; }
@@ -328,7 +328,7 @@ window.Parser = window.Parser || {};
     return S._stealthData.defaultScripts || [];
   }
 
-  // ── 反爬脚本：注入到 document.getElementById("webview") ──
+  // ── Stealth 脚本：注入到 document.getElementById("webview") ──
   function injectStealthConfig(host) {
     var scripts = getStealthScriptsForHost(host);
     var injectScripts = scripts.filter(function(id) { return S.STEALTH_INJECT_IDS.indexOf(id) !== -1; });
@@ -351,7 +351,7 @@ window.Parser = window.Parser || {};
       var code = buildStealthInjectCode(allScripts);
       if (code) {
         window.api.stealthInjectCdp(wcid, code).then(function(r) {
-          if (r && r.ok) console.log('[CDP] 反爬脚本预注入成功, id=' + wcid);
+          if (r && r.ok) console.log('[CDP] stealth 脚本预注入成功, id=' + wcid);
           else console.warn('[CDP] 预注入失败:', r && r.error);
         }).catch(function(e) {
           console.warn('[CDP] 预注入异常:', e.message);
@@ -522,7 +522,7 @@ window.Parser = window.Parser || {};
     var scripts = getStealthScriptsForHost(host);
     return scripts.indexOf(id) !== -1;
   }
-  // 根据当前域名应用全局反爬设置（UA/Cookie）
+  // 根据当前域名应用全局 stealth 设置（UA/Cookie）
   async function applyStealthGlobals(host) {
     // UA 随机切换
     var uaOn = isStealthGlobalEnabled('ua', host);
@@ -533,7 +533,7 @@ window.Parser = window.Parser || {};
     }
   }
 
-  // ── 反爬脚本：设置面板 UI ──
+  // ── Stealth 脚本：设置面板 UI ──
   function renderStealthUI() {
     var defaultContainer = document.getElementById('stealthDefaultScripts');
     if (!defaultContainer) return;
@@ -1729,7 +1729,7 @@ window.Parser = window.Parser || {};
     updateRowSelection: updateRowSelection,
   };
 
-  // Stealth / 反爬功能（从 app.js 迁移至此，供 app.js 调用）
+  // Stealth 功能（从 app.js 迁移至此，供 app.js 调用）
   window.Parser.stealth = {
     setupCdpStealthInjection: setupCdpStealthInjection,
     injectStealthConfig: injectStealthConfig,

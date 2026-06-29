@@ -93,7 +93,7 @@ window._editorCollapseAll = function() {
   // ── 状态/工具已迁移到 modules/state.js & modules/utils.js ──
   // 通过 Parser.state.xxx / Parser.utils.xxx 访问
 
-  // ──────── 反爬脚本定义 ────────
+  // ──────── Stealth 脚本定义 ────────
   var STEALTH_SCRIPTS = [
     { id: 'canvas', label: 'Canvas 指纹加噪', desc: 'toDataURL/getImageData 加微量噪声', defaultOn: true },
     { id: 'webgl', label: 'WebGL 指纹统一', desc: '统一渲染器和供应商字符串', defaultOn: true },
@@ -744,7 +744,7 @@ window._editorCollapseAll = function() {
     }
     // 预加载默认树
     buildDefaultTree();
-    // CDP 预注入：在所有页面脚本之前植入反爬包装
+    // CDP 预注入：在所有页面脚本之前植入 stealth 包装
     Parser.stealth.setupCdpStealthInjection();
     setStatus('就绪');
   }
@@ -911,14 +911,14 @@ window._editorCollapseAll = function() {
     webviewOverlay.classList.add('hidden');
     btnFetch.classList.remove('hidden');
     btnElementPicker.classList.remove('hidden');
-    // 预注入反爬配置（在 preload 运行前尽可能早）
+    // 预注入 stealth 配置（在 preload 运行前尽可能早）
     var host = extractHost(url);
     Parser.stealth.injectStealthConfig(host);
     Parser.stealth.applyStealthGlobals(host);
     webview.loadURL(url);
     addHistory(url, '');
     if(pageInfo)pageInfo.textContent ='加载中...';
-    // 根据反爬面板的 autocookie 开关决定是否加载 Cookie
+    // 根据 stealth 面板的 autocookie 开关决定是否加载 Cookie
     if (Parser.stealth.isStealthGlobalEnabled('autocookie', host)) {
       window.api.cookieLoad(url).then(r => {
         if (r && r.count > 0) {
@@ -1021,7 +1021,7 @@ window._editorCollapseAll = function() {
         + 'obs.observe(document.head||document.documentElement,{childList:true});'
         + '})()'
       ).catch(function(){});
-      // 注入反爬配置和原型包装（页面加载完成后注入到页面 JS 上下文）
+      // 注入 stealth 配置和原型包装（页面加载完成后注入到页面 JS 上下文）
       var injectHost = extractHost(webview.getURL());
       Parser.stealth.injectStealthConfig(injectHost);
       var injectScripts2 = Parser.stealth.getStealthScriptsForHost(injectHost).filter(function(id) { return Parser.state.STEALTH_INJECT_IDS.indexOf(id) !== -1; });
@@ -1037,7 +1037,7 @@ window._editorCollapseAll = function() {
     });
     webview.addEventListener('did-start-loading', () => {
       if(pageInfo)pageInfo.textContent ='加载中...';
-      // 注入反爬配置（尽早设置，让 preload 中的 stealth 能读取）
+      // 注入 stealth 配置（尽早设置，让 preload 中的 stealth 能读取）
       var host = extractHost(webview.getURL());
       Parser.stealth.injectStealthConfig(host);
       // 尽早注入原型包装（在页面脚本运行前）
@@ -5129,7 +5129,7 @@ window._editorCollapseAll = function() {
     collectorFloat.classList.add('pf-collect-mode');
     collectorFloat.classList.remove('pf-batch-mode');
     pfCollect.classList.toggle('hidden', subMode !== 'auto');
-    // 启动采集前重新注入反爬（确保 SPA 页面反爬不过期）
+    // 启动采集前重新注入 stealth（确保 SPA 页面 stealth 不过期）
     var host = extractHost(webview.getURL());
     Parser.stealth.injectStealthConfig(host);
     Parser.stealth.applyStealthGlobals(host);

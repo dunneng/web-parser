@@ -1,6 +1,6 @@
 # 🕸️ 网页解析器 (WebParser)
 
-> 可视化网页数据提取工具 — 所见即所得，让爬虫像浏览网页一样简单。
+> 可视化网页数据提取工具 — 所见即所得，像浏览网页一样提取数据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Electron](https://img.shields.io/badge/Electron-42%2B-47848f?logo=electron)](https://www.electronjs.org/)
@@ -13,7 +13,19 @@
 
 **网页解析器** 是一款基于 Electron + FastAPI 的桌面端网页数据提取工具。内置浏览器让你像正常上网一样浏览目标页面，然后通过 CSS 选择器、XPath、正则表达式等方式**可视化框选**需要的数据，一键导出 Excel/CSV。
 
-专治各类现代前端渲染的网页（淘宝、1688、京东等），支持 AJAX 翻页、虚拟列表 DOM 不完整等复杂场景。
+专治各类现代前端渲染的网页（如主流电商平台），支持 AJAX 翻页、虚拟列表 DOM 不完整等复杂场景。
+
+---
+
+## 📸 界面预览
+
+| 主界面 | 框选提取 |
+|--------|---------|
+| ![主界面](web-parser/assets/screenshots/01-main.png) | ![框选提取](web-parser/assets/screenshots/02-extract.png) |
+
+| 链路提取结果 | 跨平台比价 |
+|------------|-----------|
+| ![提取结果](web-parser/assets/screenshots/03-results.png) | ![比价](web-parser/assets/screenshots/04-compare.png) |
 
 ---
 
@@ -48,7 +60,7 @@
 - 以图搜图 / 以文搜图
 
 ### 💰 跨平台比价
-- 支持 1688、淘宝、天猫、京东、拼多多
+- 支持主流电商平台
 - 一键比价搜索
 - 价格对比结果一目了然
 
@@ -101,21 +113,24 @@
 ```bash
 # 1. 克隆项目
 git clone git@github.com:dunneng/web-parser.git
-cd web-parser
+cd web-parser/web-parser          # ⚠️ 进两层，项目在子目录下
 
 # 2. 安装前端依赖
-cd web-parser
 npm install
 
 # 3. 安装 Python 依赖
 cd python
-pip install -r requirements.txt
+pip install -r requirements.txt    # Mac/Linux 用 pip3
 
-# 4. 启动
+# 4. 回到项目根目录启动
+cd ..
 npx electron .
 ```
 
-> 💡 Windows 用户也可以直接运行 `清除进程.bat` 一键重启
+| 平台 | 一键重启 |
+|------|---------|
+| Windows | 双击 `清除进程.bat` |
+| macOS / Linux | `bash 清除进程.sh`
 
 ### Python 依赖
 
@@ -179,10 +194,10 @@ web-parser/
 
 ## 🎯 为什么选择网页解析器？
 
-| 对比维度 | 传统爬虫 | 网页解析器 |
+| 对比维度 | 传统工具 | 网页解析器 |
 |---------|---------|-----------|
 | 学习成本 | 需学 Python + Scrapy | 会浏览网页即可 |
-| 反爬对抗 | 手动处理 Cookie/Headers | 内置真实浏览器 |
+| 兼容复杂页面 | 手动处理 Cookie/Headers | 内置真实浏览器，天然支持 |
 | 动态页面 | 需分析 XHR/API | 浏览器渲染，天然支持 |
 | DOM 不完整 | 需逆向工程 | 链路提取一步到位 |
 | 批量采集 | 写脚本 | 标签式任务，点击即采 |
@@ -199,6 +214,18 @@ web-parser/
 3. 提交更改 (`git commit -m 'feat: add amazing feature'`)
 4. 推送到分支 (`git push origin feature/amazing`)
 5. 创建 Pull Request
+
+---
+
+## ⚠️ 免责声明
+
+本工具仅供**学习研究**使用。使用者应：
+
+- 遵守目标网站的 `robots.txt` 协议和服务条款
+- 不得用于非法爬取、侵犯他人隐私或商业侵权
+- 遵守《网络安全法》等相关法律法规
+
+作者不对使用者的任何不当使用承担法律责任。
 
 ---
 

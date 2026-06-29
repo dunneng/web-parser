@@ -63,14 +63,14 @@ contextBridge.exposeInMainWorld('api', {
   // Webview preload path
   webviewPreloadPath: () => ipcRenderer.invoke('webview:preload-path'),
 
-  // CDP 脚本预注入（在页面脚本运行前注入反爬代码）
+  // CDP 脚本预注入（在页面脚本运行前注入 stealth 代码）
   stealthInjectCdp: (webContentsId, script) => ipcRenderer.invoke('stealth:inject-cdp', { webContentsId, script }),
 
   // Selector persistence
   selectorsSave: (selectors) => ipcRenderer.invoke('selectors:save', selectors),
   selectorsLoad: () => ipcRenderer.invoke('selectors:load'),
 
-  // 反爬/辅助开关
+  // Stealth/辅助开关
   antidetectToggle: () => ipcRenderer.invoke('antidetect:toggle'),
   domPersistToggle: () => ipcRenderer.invoke('dom-persist:toggle'),
   apiListenToggle: () => ipcRenderer.invoke('api-listen:toggle'),
