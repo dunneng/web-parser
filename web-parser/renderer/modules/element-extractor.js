@@ -1015,6 +1015,7 @@ window.Parser = window.Parser || {};
     document.getElementById("elementPickerBar").classList.add('hidden');
     document.getElementById("elementEditor").classList.add('hidden');
     $('#statusEditor').textContent = '';
+    document.getElementById("webviewContainer").style.maxHeight = '';
     // 退出提取时隐藏浮窗（批量/采集跑着时不藏）
     if (!window.Parser.state.batchLoadRunning && !(window.collector && window.collector.active)) {
       var bf = document.getElementById("paginationFloat");
@@ -1284,7 +1285,24 @@ window.Parser = window.Parser || {};
       if (clean && !seenClean[clean]) { seenClean[clean] = true; cleanList.push({clean: clean, original: css}); }
     });
 
-    document.getElementById("queryInput").value = cleanList.map(function(c) { return c.clean; }).join(', ');
+    // 追加到现有查询（跨页累积），去重
+    var queryInput = document.getElementById("queryInput");
+    var existing = queryInput.value.trim();
+    var allSelectors = existing ? existing.split(/,\s*/).filter(Boolean) : [];
+    var existingSet = {};
+    allSelectors.forEach(function(s) { existingSet[s.trim()] = true; });
+    cleanList.forEach(function(c) {
+      if (!existingSet[c.clean]) {
+        existingSet[c.clean] = true;
+        allSelectors.push(c.clean);
+      }
+    });
+    var merged = allSelectors.join(', ');
+    queryInput.value = merged;
+    // 同时加入剪贴板（容错：writeClipboard 可能不可用）
+    if (merged) {
+      try { window._addToClipboard(merged, '自动识别'); } catch(e) {}
+    }
 
     var matchedItems = [];
     try {
@@ -1423,8 +1441,9 @@ window.Parser = window.Parser || {};
     });
 
     // 3. 编辑器按钮
-    document.getElementById("btnEditorClose").addEventListener('click', function () { document.getElementById("elementEditor").classList.add('hidden'); $('#statusEditor').textContent = ''; });
-    document.getElementById("btnEditorSave").addEventListener('click', saveSelectorRules);
+    document.getElementById("btnEditorClose").addEventListener('click', function () { document.getElementById("elementEditor").classList.add('hidden'); $('#statusEditor').textContent = ''; document.getElementById("webviewContainer").style.maxHeight = ''; });
+    var btnEditorSave = document.getElementById("btnEditorSave");
+    if (btnEditorSave) btnEditorSave.addEventListener('click', saveSelectorRules);
     var btnBarSave = document.getElementById("btnBarSaveRules");
     if (btnBarSave) btnBarSave.addEventListener('click', saveSelectorRules);
     document.getElementById("btnEditorRematchAll").addEventListener('click', rematchAllSelectors);
@@ -1442,8 +1461,17 @@ window.Parser = window.Parser || {};
       editorResizeStart = e.clientY;
       editorResizeStartH = document.getElementById("elementEditor").offsetHeight;
       document.getElementById("elementEditor").style.flex = 'none';
+      // 拖拽期间禁用 body 滚动，避免滚动条和拖拽打架
+      var body = document.getElementById("elementEditorBody");
+      body.style.overflowY = 'hidden';
       document.addEventListener('mousemove', onEditorResize);
       document.addEventListener('mouseup', onEditorResizeEnd);
+      function onEditorResizeEnd() {
+        body.style.overflowY = '';  // 清除 inline，恢复 CSS 默认
+        editorResize.classList.remove('active');
+        document.removeEventListener('mousemove', onEditorResize);
+        document.removeEventListener('mouseup', onEditorResizeEnd);
+      }
     });
     function onEditorResize(e) {
       var delta = editorResizeStart - e.clientY;
@@ -1451,12 +1479,6 @@ window.Parser = window.Parser || {};
       document.getElementById("elementEditor").style.height = newH + 'px';
       document.getElementById("elementEditor").style.maxHeight = 'none';
     }
-    function onEditorResizeEnd() {
-      editorResize.classList.remove('active');
-      document.removeEventListener('mousemove', onEditorResize);
-      document.removeEventListener('mouseup', onEditorResizeEnd);
-    }
-
     // 4. 选择器弹框
     document.getElementById("btnSelectorCancel").addEventListener('click', function () { document.getElementById("selectorModal").classList.add('hidden'); });
     document.getElementById("btnSelectorModalClose").addEventListener('click', function () { document.getElementById("selectorModal").classList.add('hidden'); });
@@ -2626,6 +2648,7 @@ window.Parser = window.Parser || {};
             '</td>';
           html += '<td style="text-align:center;white-space:nowrap"><span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(167,139,250,0.15);color:#a78bfa">' + children.length + ' 合</span></td>';
           html += '<td style="text-align:center;white-space:nowrap">' +
+            '<button class="editor-item-btn copy-sel" data-idx="' + idx + '" title="复制 CSS 到剪贴板">📋</button>' +
             '<button class="editor-item-btn rematch-merge" data-idx="' + idx + '" title="重匹配">↻</button>' +
             '<button class="editor-item-btn merge-toggle" data-idx="' + idx + '" data-gid="' + groupId + '" title="展开/收起">▸</button>' +
             '<button class="editor-item-btn merge-split" data-idx="' + idx + '" title="拆分">⇱</button>' +
@@ -2672,6 +2695,7 @@ window.Parser = window.Parser || {};
             '</td>';
           html += '<td style="text-align:center;white-space:nowrap"><span style="font-size:10px;padding:1px 5px;border-radius:3px;white-space:nowrap;' + (item.matchCount > 0 ? 'background:rgba(74,222,128,0.15);color:var(--green)' : 'background:rgba(248,113,113,0.15);color:var(--red)') + '">' + statusText + '</span></td>';
           html += '<td style="text-align:center;white-space:nowrap">' +
+            '<button class="editor-item-btn copy-sel" data-idx="' + idx + '" title="复制 CSS 到剪贴板">📋</button>' +
             '<button class="editor-item-btn rematch" data-idx="' + idx + '" title="重匹配">↻</button>' +
             '<button class="editor-item-btn merge-pick" data-idx="' + idx + '" title="合并">+</button>' +
             '<button class="editor-item-btn split-elem" data-idx="' + idx + '" title="拆分为子元素">↯</button>' +
@@ -2776,6 +2800,17 @@ window.Parser = window.Parser || {};
       if (msBtn) { e.stopPropagation ? e.stopPropagation() : (e.cancelBubble=true); splitGroup(parseInt(msBtn.dataset.idx)); return; }
       var rBtn = e.target.closest('.rematch');
       if (rBtn) { rematchSingleSelector(parseInt(rBtn.dataset.idx)); return; }
+      var copyBtn = e.target.closest('.copy-sel');
+      if (copyBtn) {
+        e.stopPropagation ? e.stopPropagation() : (e.cancelBubble=true);
+        var cidx = parseInt(copyBtn.dataset.idx);
+        var citem = S.editorItems[cidx];
+        if (citem && citem.selector) {
+          try { window._addToClipboard(citem.selector, '元素提取'); } catch(e) {}
+          Parser.utils.showToast('已加入剪贴板: ' + citem.selector.substring(0, 50));
+        }
+        return;
+      }
       var delBtn = e.target.closest('.delete');
       if (delBtn) { var didx = parseInt(delBtn.dataset.idx); S.editorItems.splice(didx, 1); updatePickedElementsFromEditor(); updatePickedTreeNodes(); renderElementEditor(); return; }
       var rowEl = e.target.closest('tr[data-idx]');

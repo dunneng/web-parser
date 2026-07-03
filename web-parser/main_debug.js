@@ -909,12 +909,14 @@ app.on('web-contents-created', (event, contents) => {
     }
     return { action: 'deny' };
   });
-  // 转发右键菜单到主窗口
-  contents.on('context-menu', (e, params) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('webview:context-menu', params);
-    }
-  });
+  // 转发右键菜单到主窗口（仅 webview，主窗口有自己的右键处理）
+  if (contents.getType() === 'webview') {
+    contents.on('context-menu', (e, params) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('webview:context-menu', params);
+      }
+    });
+  }
 });
 
 app.whenReady().then(async () => {

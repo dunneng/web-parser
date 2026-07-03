@@ -18,6 +18,16 @@ window.Parser = window.Parser || {};
     _eventsBound = true;
     document.getElementById("btnQuery").addEventListener('click', executeQuery);
     document.getElementById("queryInput").addEventListener('keydown', e => { if (e.key === 'Enter') executeQuery(); });
+    // 查询框剪贴板按钮：多选剪贴板条目，逗号合并填入
+    document.getElementById("btnQueryClipboard").addEventListener('click', function() {
+      var history = Parser.state.clipboardHistory || [];
+      if (history.length === 0) {
+        Parser.utils.showToast('剪贴板为空，请先在提取结果中 Ctrl+C 复制选择器');
+        return;
+      }
+      var queryInput = document.getElementById("queryInput");
+      _showClipboardMultiPicker(queryInput, '查询表达式');
+    });
     document.getElementById("querySearch").addEventListener('input', applyFilters);
     // 工具栏全选 ←→ 表头全选 双向同步
     document.getElementById("queryCheckAll").addEventListener('change', function() {
@@ -696,17 +706,48 @@ window.Parser = window.Parser || {};
     try {
       const endpointMap = { 'xpath': 'xpath', 'css': 'css', 'regex': 'regex', 'jsonpath': 'jsonpath' };
       const endpoint = endpointMap[mode] || 'css';
-      var qhtml = await document.getElementById("webview").executeJavaScript('document.documentElement.outerHTML') || S.currentHtml;
-      var qbody = { html: qhtml, query: query };
-      if (endpoint === 'xpath' || endpoint === 'css') qbody.child_delim = S.globalChildDelim;
-      qbody.expand_children = !!S.expandChildren;
-      const resp = await fetch('http://127.0.0.1:' + S.pythonPort + '/api/extract/' + endpoint, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(qbody),
-      });
-      const result = await resp.json();
-      if (result.results) {
-        S.queryResults = result.results.map(function(row) {
+
+      // 收集所有要查询的 HTML 页面（快照 + 当前页）
+      var htmlPages = [];
+      try {
+        var slResp = await fetch('http://127.0.0.1:' + S.pythonPort + '/api/page-snapshots/list');
+        if (slResp.ok) {
+          var slData = await slResp.json();
+          var snaps = slData.snapshots || [];
+          for (var si = 0; si < snaps.length; si++) {
+            var shResp = await fetch('http://127.0.0.1:' + S.pythonPort + '/api/page-snapshots/' + snaps[si].id + '/html');
+            if (shResp.ok) {
+              var shData = await shResp.json();
+              if (shData.html) htmlPages.push(shData.html);
+            }
+          }
+        }
+      } catch(e) {}
+      // 无快照时回退到当前页
+      if (htmlPages.length === 0) {
+        var qhtml = await document.getElementById("webview").executeJavaScript('document.documentElement.outerHTML') || S.currentHtml;
+        if (qhtml) htmlPages = [qhtml];
+      }
+
+      // 逐页查询并合并
+      var allResults = [];
+      var totalCount = 0;
+      for (var pi = 0; pi < htmlPages.length; pi++) {
+        var qbody = { html: htmlPages[pi], query: query };
+        if (endpoint === 'xpath' || endpoint === 'css') qbody.child_delim = S.globalChildDelim;
+        qbody.expand_children = !!S.expandChildren;
+        const resp = await fetch('http://127.0.0.1:' + S.pythonPort + '/api/extract/' + endpoint, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(qbody),
+        });
+        const pageResult = await resp.json();
+        if (pageResult.results) {
+          allResults = allResults.concat(pageResult.results);
+          totalCount += pageResult.count || pageResult.results.length;
+        }
+      }
+      if (allResults.length > 0) {
+        S.queryResults = allResults.map(function(row) {
           var clean = {};
           Object.keys(row).forEach(function(k) {
             var v = row[k];
@@ -716,9 +757,10 @@ window.Parser = window.Parser || {};
         });
         var linkInfo = (endpoint === 'css' || endpoint === 'xpath') ? { type: endpoint, query: query } : null;
         renderQueryTable(S.queryResults, null, linkInfo);
-        setStatus(mode + ' 查询完成 - ' + result.count + ' 条结果');
-      } else if (result.error) {
-        document.getElementById("queryResults").innerHTML = '<div class="tree-empty">错误: ' + escapeHtml(result.error) + '</div>';
+        setStatus(mode + ' 查询完成 - ' + totalCount + ' 条结果（' + htmlPages.length + ' 页合并）');
+      } else {
+        document.getElementById("queryResults").innerHTML = '<div class="tree-empty">无匹配结果（已查 ' + htmlPages.length + ' 页）</div>';
+        setStatus('查询完成 - 0 条结果');
       }
     } catch (err) {
       document.getElementById("queryResults").innerHTML = '<div class="tree-empty">查询失败: ' + err.message + '</div>';

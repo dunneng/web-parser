@@ -68,7 +68,8 @@
           <!-- 查询结果表格 -->
           <div id="queryContainer" class="query-container hidden">
             <div class="query-input-row">
-              <input type="text" id="queryInput" class="query-input" placeholder="输入查询表达式..." autocomplete="off" spellcheck="false" inputmode="search">
+              <input type="text" id="queryInput" class="query-input" placeholder="输入查询表达式（逗号分隔多个选择器）..." autocomplete="off" spellcheck="false" inputmode="search">
+              <button id="btnQueryClipboard" class="btn btn-sm" title="从剪贴板选择多个选择器，逗号合并填入" style="font-size:12px;padding:0 6px;flex-shrink:0">📋</button>
               <button id="btnQuery" class="btn btn-accent">查询</button>
             </div>
             <div class="query-toolbar">
@@ -99,6 +100,7 @@
       <span>浏览区</span>
       <div class="panel-actions">
         <button id="btnElementPicker" class="btn btn-sm btn-accent hidden" title="元素提取">元素提取</button>
+        <button id="btnManagePicked" class="btn btn-sm btn-primary hidden" title="查看已选元素">管理已选</button>
         <button id="btnRefresh" class="btn btn-sm" title="刷新页面">刷新</button>
       </div>
     </div>
@@ -349,7 +351,6 @@
       </div>
       <div class="picker-actions">
         <button id="btnPickAuto" class="btn btn-sm btn-accent">自动识别同类</button>
-        <button id="btnManagePicked" class="btn btn-sm btn-primary">管理已选</button>
         <button id="btnBarSaveRules" class="btn btn-sm btn-primary" title="持久化保存选择器规则">保存规则</button>
       </div>
     </div>
@@ -363,7 +364,6 @@
           <button id="btnEditorRematchAll" class="btn btn-sm" style="height:24px;padding:0 8px;font-size:11px" title="重新匹配所有选择器">全部重匹配</button>
           <button id="btnEditorExpandAll" class="btn btn-sm" onclick="window._editorExpandAll()" style="height:24px;padding:0 8px;font-size:11px" title="全部展开">全部展开</button>
           <button id="btnEditorCollapseAll" class="btn btn-sm" onclick="window._editorCollapseAll()" style="height:24px;padding:0 8px;font-size:11px" title="全部折叠">全部折叠</button>
-          <button id="btnEditorSave" class="btn btn-sm" style="height:24px;padding:0 8px;font-size:11px" title="持久化保存选择器">保存规则</button>
           <button id="btnEditorClose" class="btn btn-sm" style="height:24px;padding:0 8px;font-size:11px">&times;</button>
         </div>
       </div>

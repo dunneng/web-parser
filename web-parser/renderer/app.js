@@ -121,6 +121,7 @@ window._editorCollapseAll = function() {
   const btnFetch = $('#btnFetch');
   const btnRefresh = $('#btnRefresh');
   const btnElementPicker = $('#btnElementPicker');
+  const btnManagePickedHeader = $('#btnManagePicked');
   const webview = $('#webview');
   const webviewOverlay = $('#webviewOverlay');
   const cookieStatus = $('#cookieStatus');
@@ -911,6 +912,7 @@ window._editorCollapseAll = function() {
     webviewOverlay.classList.add('hidden');
     btnFetch.classList.remove('hidden');
     btnElementPicker.classList.remove('hidden');
+    btnManagePickedHeader.classList.remove('hidden');
     // 预注入 stealth 配置（在 preload 运行前尽可能早）
     var host = extractHost(url);
     Parser.stealth.injectStealthConfig(host);
@@ -3009,11 +3011,11 @@ window._editorCollapseAll = function() {
 
   // ── 节点浏览器右键菜单 ──
   function showNodeExplorerContextMenu(x, y, node) {
-    var old = document.getElementById('treeContextMenu');
+    var old = document.getElementById('ctxMenu-nodeExplorer');
     if (old) old.remove();
 
     var menu = document.createElement('div');
-    menu.id = 'treeContextMenu';
+    menu.id = 'ctxMenu-nodeExplorer';
     menu.className = 'context-menu';
     menu.style.left = x + 'px';
     menu.style.top = y + 'px';
@@ -3989,7 +3991,6 @@ window._editorCollapseAll = function() {
     if (!panel) return;
     var list = panel.querySelector('.clipboard-list');
     if (!list) {
-      // 在清除按钮后面创建列表容器
       var btnRow = panel.querySelector('div');
       list = document.createElement('div');
       list.className = 'clipboard-list';
@@ -3999,16 +4000,78 @@ window._editorCollapseAll = function() {
       list.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:12px;text-align:center">剪贴板为空</div>';
       return;
     }
+    // 检测链路编辑器是否打开
+    var chainModalOpen = !!(document.getElementById('schemaModal') && !document.getElementById('schemaModal').classList.contains('hidden') && (Parser.state.chainSegments || []).length > 0);
+    if (chainModalOpen) {
+      // 链路编辑器开着：在面板顶部加提示
+      var hintDiv = panel.querySelector('.clipboard-chain-hint');
+      if (!hintDiv) {
+        hintDiv = document.createElement('div');
+        hintDiv.className = 'clipboard-chain-hint';
+        hintDiv.style.cssText = 'font-size:11px;color:var(--accent);padding:2px 4px 6px;display:flex;justify-content:space-between;align-items:center';
+        panel.insertBefore(hintDiv, list);
+      }
+      hintDiv.innerHTML = '<span>💡 点击条目旁的 <b>+子链路</b> 可将选择器追加到子链路输入框</span>';
+    } else {
+      var hintDivOld = panel.querySelector('.clipboard-chain-hint');
+      if (hintDivOld) hintDivOld.remove();
+    }
     var html = '';
     for (var i = 0; i < Parser.state.clipboardHistory.length; i++) {
       var item = Parser.state.clipboardHistory[i];
       var preview = item.text.replace(/</g, '&lt;').replace(/>/g, '&gt;').substring(0, 80);
-      html += '<div class="clipboard-item" data-text="' + item.text.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '">';
+      html += '<div class="clipboard-item" data-text="' + item.text.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '" style="display:flex;align-items:flex-start;gap:4px">';
+      html += '<div style="flex:1;min-width:0">';
       html += '<div class="clipboard-item-preview">' + preview + '</div>';
       html += '<div class="clipboard-item-meta">' + item.source + ' · ' + item.time + '</div>';
       html += '</div>';
+      if (chainModalOpen) {
+        html += '<button class="btn-clipboard-to-subchain" data-idx="' + i + '" title="追加到子链路输入框" style="font-size:10px;padding:1px 6px;height:20px;flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:3px;cursor:pointer;font-family:inherit;white-space:nowrap;margin-top:2px">+子链路</button>';
+      }
+      html += '</div>';
     }
     list.innerHTML = html;
+
+    // 绑定 "+子链路" 按钮事件
+    if (chainModalOpen) {
+      list.querySelectorAll('.btn-clipboard-to-subchain').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var idx = parseInt(this.dataset.idx);
+          var text = (Parser.state.clipboardHistory[idx].text || '').trim();
+          if (!text) return;
+          // 找到第一个子链路输入框（或第一个空的）
+          var editorBody = document.querySelector('#chainEditorBody');
+          if (!editorBody) {
+            Parser.utils.showToast('请先打开链路编辑器');
+            return;
+          }
+          var inputs = editorBody.querySelectorAll('.chain-sub-sel-input-editor');
+          var targetInput = null;
+          // 优先选有焦点的
+          for (var j = 0; j < inputs.length; j++) {
+            if (inputs[j] === document.activeElement) { targetInput = inputs[j]; break; }
+          }
+          // 否则选第一个空的
+          if (!targetInput) {
+            for (var j = 0; j < inputs.length; j++) {
+              if (!inputs[j].value.trim()) { targetInput = inputs[j]; break; }
+            }
+          }
+          // 否则选第一个
+          if (!targetInput && inputs.length > 0) targetInput = inputs[0];
+          if (!targetInput) {
+            Parser.utils.showToast('请先在链路编辑器中添加子链路');
+            return;
+          }
+          var cur = targetInput.value.trim();
+          if (cur && cur.slice(-1) !== ',') cur += ', ';
+          targetInput.value = cur + text;
+          targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+          Parser.utils.showToast('已加入子链路');
+        });
+      });
+    }
   }
 
   // ──────── 左侧树右键菜单 ────────
@@ -4027,7 +4090,14 @@ window._editorCollapseAll = function() {
       }
 
       var row = e.target.closest('.tree-node-row');
-      if (!row) return;
+      if (!row) {
+        // 空白区域：显示树全局菜单
+        e.preventDefault();
+        e.stopPropagation();
+        showTreeGlobalContextMenu(e.clientX, e.clientY);
+        return;
+      }
+
       e.preventDefault();
       e.stopPropagation();
 
@@ -4044,11 +4114,57 @@ window._editorCollapseAll = function() {
 
     // 点击其他地方关闭右键菜单
     document.addEventListener('click', function(e) {
-      var menu = document.getElementById('treeContextMenu');
-      if (menu && !menu.contains(e.target)) {
-        menu.remove();
-      }
+      ['treeContextMenu', 'ctxMenu-nodeExplorer', 'webviewContextMenu', 'tableContextMenu'].forEach(function(id) {
+        var menu = document.getElementById(id);
+        if (menu && !menu.contains(e.target)) { menu.remove(); }
+      });
     });
+  }
+
+  function showTreeGlobalContextMenu(x, y) {
+    var old = document.getElementById('treeContextMenu');
+    if (old) old.remove();
+
+    var menu = document.createElement('div');
+    menu.id = 'treeContextMenu';
+    menu.className = 'context-menu';
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.style.minWidth = '150px';
+
+    var items = [
+      { label: '🔽 展开全部组', action: function() {
+        treeContent.querySelectorAll('.tree-group-body').forEach(function(b) { b.classList.remove('hidden'); });
+        treeContent.querySelectorAll('.tree-children.hidden').forEach(function(c) { c.classList.remove('hidden'); });
+        treeContent.querySelectorAll('.group-toggle').forEach(function(t) { t.textContent = '▼'; });
+        treeContent.querySelectorAll('.toggle').forEach(function(t) {
+          var node = t.closest('.tree-node');
+          if (node && node.querySelector('.tree-children')) t.textContent = '▼';
+        });
+      }},
+      { label: '🔼 折叠全部组', action: function() {
+        treeContent.querySelectorAll('.tree-group-body').forEach(function(b) { b.classList.add('hidden'); });
+        treeContent.querySelectorAll('.tree-children').forEach(function(c) { c.classList.add('hidden'); });
+        treeContent.querySelectorAll('.group-toggle').forEach(function(t) { t.textContent = '▶'; });
+        treeContent.querySelectorAll('.toggle').forEach(function(t) {
+          var node = t.closest('.tree-node');
+          if (node && node.querySelector('.tree-children')) t.textContent = '▶';
+        });
+      }}
+    ];
+
+    items.forEach(function(item) {
+      var el = document.createElement('div');
+      el.className = 'context-menu-item';
+      el.textContent = item.label;
+      el.addEventListener('click', function() { menu.remove(); item.action(); });
+      menu.appendChild(el);
+    });
+
+    document.body.appendChild(menu);
+    var menuRect = menu.getBoundingClientRect();
+    if (menuRect.right > window.innerWidth) menu.style.left = (x - menuRect.width) + 'px';
+    if (menuRect.bottom > window.innerHeight) menu.style.top = (y - menuRect.height) + 'px';
   }
 
   function showTreeContextMenu(x, y, label, type, row) {
@@ -4112,14 +4228,40 @@ window._editorCollapseAll = function() {
         if (body) {
           body.classList.remove('hidden');
           body.querySelectorAll('.tree-children.hidden').forEach(function(c) { c.classList.remove('hidden'); });
-          body.querySelectorAll('.tree-toggle.collapsed').forEach(function(t) { t.classList.remove('collapsed'); });
+            body.querySelectorAll('.toggle').forEach(function(t) {
+              var node = t.closest('.tree-node');
+              if (node && node.querySelector('.tree-children')) t.textContent = '▼';
+            });
         }
+        header.querySelector('.group-toggle').textContent = '▼';
       }},
       { label: '折叠组内全部', action: function() {
         var body = header.nextElementSibling;
         if (body) {
           body.classList.add('hidden');
+          body.querySelectorAll('.tree-children').forEach(function(c) { c.classList.add('hidden'); });
+          body.querySelectorAll('.toggle').forEach(function(t) { t.textContent = '▶'; });
         }
+        header.querySelector('.group-toggle').textContent = '▶';
+      }},
+      '-',
+      { label: '🔽 展开全部组', action: function() {
+        treeContent.querySelectorAll('.tree-group-body').forEach(function(b) { b.classList.remove('hidden'); });
+        treeContent.querySelectorAll('.tree-children.hidden').forEach(function(c) { c.classList.remove('hidden'); });
+        treeContent.querySelectorAll('.group-toggle').forEach(function(t) { t.textContent = '▼'; });
+        treeContent.querySelectorAll('.toggle').forEach(function(t) {
+          var node = t.closest('.tree-node');
+          if (node && node.querySelector('.tree-children')) t.textContent = '▼';
+        });
+      }},
+      { label: '🔼 折叠全部组', action: function() {
+        treeContent.querySelectorAll('.tree-group-body').forEach(function(b) { b.classList.add('hidden'); });
+        treeContent.querySelectorAll('.tree-children').forEach(function(c) { c.classList.add('hidden'); });
+        treeContent.querySelectorAll('.group-toggle').forEach(function(t) { t.textContent = '▶'; });
+        treeContent.querySelectorAll('.toggle').forEach(function(t) {
+          var node = t.closest('.tree-node');
+          if (node && node.querySelector('.tree-children')) t.textContent = '▶';
+        });
       }}
     ];
 
@@ -4338,14 +4480,17 @@ window._editorCollapseAll = function() {
         var n = row.closest('.tree-node');
         if (n) {
           n.querySelectorAll('.tree-children.hidden, .tree-group-body.hidden').forEach(function(c) { c.classList.remove('hidden'); });
-          n.querySelectorAll('.tree-toggle.collapsed').forEach(function(t) { t.classList.remove('collapsed'); });
+          n.querySelectorAll('.toggle').forEach(function(t) { t.textContent = '▼'; });
         }
       }});
       items.push({ label: '🔼 折叠全部子节点', action: function(row) {
         var n = row.closest('.tree-node');
         if (n) {
           n.querySelectorAll('.tree-children:not(.hidden), .tree-group-body:not(.hidden)').forEach(function(c) { c.classList.add('hidden'); });
-          n.querySelectorAll('.tree-toggle:not(.collapsed)').forEach(function(t) { t.classList.add('collapsed'); });
+          n.querySelectorAll('.toggle').forEach(function(t) {
+            var nd = t.closest('.tree-node');
+            if (nd && nd.querySelector('.tree-children')) t.textContent = '▶';
+          });
         }
       }});
     }
@@ -4843,6 +4988,32 @@ window._editorCollapseAll = function() {
     items.push({ label: '\u{1F504}  刷新页面', action: function() {
       try { webview.reload(); } catch(e) {}
     }});
+    items.push('-');
+    items.push({ label: '\u{1F4C4}  查看页面源代码', action: function() {
+      webview.executeJavaScript('document.documentElement.outerHTML').then(function(html) {
+        // 浮动弹窗，不覆盖查询面板
+        var old = document.getElementById('sourceViewModal');
+        if (old) old.remove();
+        var modal = document.createElement('div');
+        modal.id = 'sourceViewModal';
+        modal.style.cssText = 'position:fixed;top:40px;left:50%;transform:translateX(-50%);width:90%;max-height:80vh;z-index:99999;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,0.4);display:flex;flex-direction:column';
+        modal.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border)">'
+          + '<span style="font-weight:600;font-size:13px">页面源代码 (' + (html.length / 1024).toFixed(1) + ' KB)</span>'
+          + '<div style="display:flex;gap:6px">'
+          + '<button class="btn-source-copy" style="font-size:11px;padding:4px 12px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text);cursor:pointer">📋 复制</button>'
+          + '<button class="btn-source-close" style="font-size:11px;padding:4px 12px;border:none;border-radius:4px;background:var(--accent);color:#fff;cursor:pointer">✕ 关闭</button>'
+          + '</div></div>'
+          + '<pre style="flex:1;overflow:auto;padding:12px;margin:0;white-space:pre-wrap;word-break:break-all;font-size:11px;line-height:1.5;color:var(--text);background:var(--bg)">' + escapeHtml(html) + '</pre>';
+        document.body.appendChild(modal);
+        modal.querySelector('.btn-source-close').addEventListener('click', function() { modal.remove(); });
+        modal.querySelector('.btn-source-copy').addEventListener('click', function() {
+          addToClipboard(html, '页面源代码');
+          setStatus('页面源代码已复制');
+        });
+        // 点击遮罩关闭
+        modal.addEventListener('mousedown', function(e) { if (e.target === modal) modal.remove(); });
+      }).catch(function() { setStatus('获取源代码失败'); });
+    }});
 
     // ── 选中内容 ──
     if (hasSelection) {
@@ -4850,6 +5021,19 @@ window._editorCollapseAll = function() {
       items.push({ label: '\u{1F4CB}  复制选中文本', action: function() {
         addToClipboard(params.selectionText, '页面选中');
         setStatus('已复制选中文本');
+      }});
+      items.push({ label: '\u{1F50D}  用选中文本搜索', action: function() {
+        var sel = params.selectionText.trim();
+        if (sel) {
+          // 在 webview 内用 Ctrl+F 搜索或跳转到搜索面板
+          queryInput.value = sel;
+          queryContainer.dataset.mode = 'css';
+          showQueryInputRow();
+          hideAllPanels();
+          queryContainer.classList.remove('hidden');
+          contentTitle.textContent = '搜索: ' + sel.substring(0, 40);
+          Parser.query.executeQuery();
+        }
       }});
     }
     if (!isEditable && !hasSelection) {
@@ -4919,65 +5103,19 @@ window._editorCollapseAll = function() {
       }});
     }
 
-    // ── 页面工具 ──
-    items.push('-');
-    items.push({ label: '\u{1F4C4}  查看页面源码', action: function() {
-      fetchAndParseSource();
-    }});
-    items.push({ label: '\u{1F550}  浏览历史', action: function() {
-      if (!Parser.state.historyPanelVisible) toggleHistoryPanel();
-    }});
-
-    // ── DOM 树（条件） ──
-    if (cachedDomTree) {
-      items.push('-');
-      items.push({ label: '\u{1F53D}  展开所有 DOM 节点', action: function() {
-        hideAllPanels();
-        queryContainer.classList.remove('hidden');
-        queryContainer.dataset.mode = '__dom__';
-        var qir = queryContainer.querySelector('.query-input-row');
-        var eb = document.getElementById('btnExportQuery');
-        var ca = document.getElementById('queryCheckAll');
-        if (qir) qir.style.display = 'none';
-        if (eb) eb.style.display = 'none';
-        if (ca) ca.style.display = 'none';
-        contentTitle.textContent = 'DOM 树';
-        renderDomTreeInResults();
-        setTimeout(function() {
-          queryResultsDiv.querySelectorAll('div').forEach(function(d) {
-            if (d.style.display === 'none') d.style.display = 'block';
-          });
-        }, 100);
-        setStatus('DOM 树 - 已展开全部节点');
-      }});
-      items.push({ label: '\u{1F53C}  折叠所有 DOM 节点', action: function() {
-        hideAllPanels();
-        queryContainer.classList.remove('hidden');
-        queryContainer.dataset.mode = '__dom__';
-        var qir = queryContainer.querySelector('.query-input-row');
-        var eb = document.getElementById('btnExportQuery');
-        var ca = document.getElementById('queryCheckAll');
-        if (qir) qir.style.display = 'none';
-        if (eb) eb.style.display = 'none';
-        if (ca) ca.style.display = 'none';
-        contentTitle.textContent = 'DOM 树';
-        renderDomTreeInResults();
-        setTimeout(function() {
-          queryResultsDiv.querySelectorAll('div').forEach(function(d) {
-            if (d.style.display !== 'none' && d.getAttribute('style') && d.getAttribute('style').indexOf('margin') >= 0) d.style.display = 'none';
-          });
-          var firstLevel = queryResultsDiv.querySelectorAll(':scope > div > div[style*="margin"]');
-          firstLevel.forEach(function(d) { d.style.display = 'block'; });
-        }, 100);
-        setStatus('DOM 树 - 已折叠全部节点');
-      }});
-    }
-
     // ── 采集（条件） ──
     if (typeof collector !== 'undefined' && collector.active) {
       items.push('-');
       items.push({ label: '\u{23F9}  关闭数据采集', action: function() { deactivateCollector(); } });
     }
+
+    // ── 页面工具 ──
+    items.push('-');
+    items.push({ label: '\u{1F4CB}  复制页面 URL', action: function() {
+      var url = webview.getURL();
+      addToClipboard(url, '页面URL');
+      setStatus('已复制页面 URL');
+    }});
 
     return items;
   }
@@ -5121,6 +5259,7 @@ window._editorCollapseAll = function() {
     panelLeft.style.width = '';
     btnFetch.classList.remove('hidden');
     btnElementPicker.classList.remove('hidden');
+    btnManagePickedHeader.classList.remove('hidden');
     collector.active = true;
     collector.tab = tab;
     collector.subMode = subMode;
@@ -7311,11 +7450,15 @@ window._editorCollapseAll = function() {
       autoRefreshPreview();
     }
     schemaModal.classList.remove('hidden');
+    // 刷新剪贴板面板（显示子链路提示）
+    renderClipboardPanel();
   }
 
   /** 关闭弹窗 */
   function closeSchemaModal() {
     schemaModal.classList.add('hidden');
+    // 刷新剪贴板面板（隐藏子链路提示）
+    renderClipboardPanel();
   }
 
   /** Tab 切换 */
@@ -8193,11 +8336,8 @@ window._editorCollapseAll = function() {
     }
     var html = '<div class="child-list-inner" style="margin-top:2px;padding-left:12px;border-left:1px solid var(--border)">';
     html += '<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px">子元素 (' + data.length + '个) · 点击选中</div>';
-    // 按子元素数量降序排列，多的排前面不遗漏
-    var sorted = data.map(function(c, i) { return {c: c, ci: i}; });
-    sorted.sort(function(a, b) { return (b.c.childCount || 0) - (a.c.childCount || 0); });
-    sorted.forEach(function(item) {
-      var c = item.c, ci = item.ci;
+    // 子元素保持原始 DOM 顺序，不排序
+    data.forEach(function(c, ci) {
       var sel = c.tag;
       var firstCls = (c.cls || '').trim().split(/\s+/)[0];
       if (firstCls && firstCls !== '.' && /^[a-zA-Z_][\w-]*$/.test(firstCls)) sel += '.' + firstCls;
@@ -9024,6 +9164,7 @@ window._editorCollapseAll = function() {
         html += '<button class="schema-subtype-btn' + (scType === 'css' ? ' active' : '') + '" data-sub-type-edit="css" data-sidx="' + sci + '" style="height:22px;font-size:10px;padding:0 8px">CSS</button>';
         html += '<button class="schema-subtype-btn' + (scType === 'xpath' ? ' active' : '') + '" data-sub-type-edit="xpath" data-sidx="' + sci + '" style="height:22px;font-size:10px;padding:0 8px">XP</button>';
         html += '<input class="chain-sub-sel-input-editor" data-sidx="' + sci + '" value="' + escapeHtml(sc.selector || '') + '" placeholder="相对选择器" style="flex:1;height:24px;font-size:11px;font-family:Consolas,monospace;border:1px solid var(--border);border-radius:3px;background:var(--bg);color:var(--text);padding:0 4px;min-width:80px">';
+        html += '<button class="btn-subchain-clipboard" data-sidx="' + sci + '" title="从剪贴板选择选择器（多选=逗号合并）" style="font-size:12px;padding:0 4px;height:22px;border:1px solid var(--border);border-radius:3px;background:var(--bg-card);color:var(--text-dim);cursor:pointer;font-family:inherit;flex-shrink:0">📋</button>';
         var isScParsed = sc.chainSegments && sc.chainSegments.length > 0;
         html += '<button class="btn-parse-subchain-editor" data-sidx="' + sci + '" style="font-size:10px;padding:1px 8px;height:22px;cursor:pointer;'
           + (isScParsed ? 'background:#22c55e;color:#fff;' : 'background:var(--accent);color:#fff;')
@@ -9076,6 +9217,14 @@ window._editorCollapseAll = function() {
         renderChainTree();
         renderChainEditor(path);
         autoRefreshChainPreview();
+      });
+    });
+    // 子链路剪贴板选择
+    bodyEl.querySelectorAll('.btn-subchain-clipboard').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var sci = parseInt(this.dataset.sidx);
+        var inp = bodyEl.querySelector('.chain-sub-sel-input-editor[data-sidx="' + sci + '"]');
+        _showSubChainClipboardPicker(sci, inp);
       });
     });
     // 添加子链路
@@ -9277,6 +9426,104 @@ window._editorCollapseAll = function() {
         if (previewEl) previewEl.innerHTML = '<div style="color:var(--text-dim);font-size:10px">预览加载失败</div>';
       });
     }
+  }
+
+  /** 通用剪贴板多选弹窗：勾选条目 → 逗号合并填入目标输入框 */
+  function _showClipboardMultiPicker(targetInput, label, anchorBtn) {
+    var history = Parser.state.clipboardHistory || [];
+    if (history.length === 0) {
+      Parser.utils.showToast('剪贴板为空，请先在提取结果中 Ctrl+C 复制选择器');
+      return;
+    }
+    // 移除旧弹窗
+    var old = document.querySelector('.clipboard-multi-popup');
+    if (old) old.remove();
+
+    var popup = document.createElement('div');
+    popup.className = 'clipboard-multi-popup';
+    popup.style.cssText = 'position:fixed;z-index:99999;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.3);max-width:480px;max-height:360px;overflow-y:auto;padding:8px;';
+
+    var labelText = label || '选择器';
+    var html = '<div style="font-size:12px;color:var(--text-dim);padding:4px 8px;margin-bottom:4px;border-bottom:1px solid var(--border)">📋 勾选条目加入「' + labelText + '」（多选将用逗号合并）</div>';
+
+    history.forEach(function(item, i) {
+      var sel = (item.text || '').trim();
+      if (!sel) return;
+      var preview = sel.length > 70 ? sel.substring(0, 70) + '...' : sel;
+      html += '<label class="clipboard-check-item" data-idx="' + i + '" style="display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;border-radius:4px;font-size:11px;font-family:Consolas,monospace">';
+      html += '<input type="checkbox" class="cb-check" style="margin:0;flex-shrink:0">';
+      html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(preview) + '</span>';
+      html += '<span style="font-size:10px;color:var(--text-dim);flex-shrink:0">' + escapeHtml(item.source || '') + '</span>';
+      html += '</label>';
+    });
+
+    html += '<div style="display:flex;gap:6px;padding:8px 0 0;border-top:1px solid var(--border);margin-top:4px">';
+    html += '<button class="btn-popup-cancel" style="flex:1;font-size:11px;padding:4px 12px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-dim);cursor:pointer;font-family:inherit">取消</button>';
+    html += '<button class="btn-popup-fill" style="flex:1;font-size:11px;padding:4px 12px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-family:inherit">填入选择器</button>';
+    html += '</div>';
+
+    popup.innerHTML = html;
+    document.body.appendChild(popup);
+
+    // 定位弹窗
+    if (anchorBtn) {
+      var rect = anchorBtn.getBoundingClientRect();
+      popup.style.left = Math.min(rect.left, window.innerWidth - 500) + 'px';
+      popup.style.top = Math.min(rect.bottom + 4, window.innerHeight - 380) + 'px';
+    } else {
+      popup.style.left = '50%'; popup.style.top = '50%';
+      popup.style.transform = 'translate(-50%,-50%)';
+    }
+
+    // 点击外部关闭
+    var _closePop = function(e) {
+      if (!popup.contains(e.target)) {
+        popup.remove();
+        document.removeEventListener('click', _closePop, true);
+      }
+    };
+    setTimeout(function() { document.addEventListener('click', _closePop, true); }, 50);
+
+    // 取消按钮
+    popup.querySelector('.btn-popup-cancel').addEventListener('click', function() {
+      popup.remove();
+      document.removeEventListener('click', _closePop, true);
+    });
+
+    // 填入按钮
+    popup.querySelector('.btn-popup-fill').addEventListener('click', function() {
+      var checked = popup.querySelectorAll('.cb-check:checked');
+      if (checked.length === 0) {
+        Parser.utils.showToast('请至少勾选一个条目');
+        return;
+      }
+      var selected = [];
+      checked.forEach(function(cb) {
+        var idx = parseInt(cb.closest('.clipboard-check-item').dataset.idx);
+        selected.push((history[idx].text || '').trim());
+      });
+      var merged = selected.join(', ');
+      // 如果输入框已有内容，追加逗号
+      var cur = targetInput.value.trim();
+      if (cur && cur.slice(-1) !== ',') cur += ', ';
+      targetInput.value = cur + merged;
+      targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+      popup.remove();
+      document.removeEventListener('click', _closePop, true);
+      Parser.utils.showToast('已填入 ' + selected.length + ' 个选择器');
+    });
+
+    // 悬停效果
+    popup.querySelectorAll('.clipboard-check-item').forEach(function(label) {
+      label.addEventListener('mouseenter', function() { this.style.background = 'var(--bg-hover)'; });
+      label.addEventListener('mouseleave', function() { this.style.background = ''; });
+    });
+  }
+
+  /** 子链路剪贴板多选弹窗（_showClipboardMultiPicker 的包装） */
+  function _showSubChainClipboardPicker(sci, targetInput) {
+    var btn = targetInput.parentElement.querySelector('.btn-subchain-clipboard');
+    _showClipboardMultiPicker(targetInput, '子链路', btn);
   }
 
   /** 从编辑器解析子链路选择器 */
@@ -10334,6 +10581,10 @@ window._editorCollapseAll = function() {
 
     // 初始化字段列表
     renderSchemaFields();
+
+    // 暴露剪贴板多选给其他模块使用
+    window._showClipboardMultiPicker = _showClipboardMultiPicker;
+    window._addToClipboard = addToClipboard;
   }
 
   init();

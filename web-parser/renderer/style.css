@@ -922,7 +922,6 @@ select option {
   min-height: 128px;
   max-height: 80vh;
   position: relative;
-  overflow: hidden;
   flex-shrink: 0;
 }
 .element-editor-resize { position: absolute; top: 0; left: 0; right: 0; height: 4px; cursor: ns-resize; z-index: 5; background: var(--border); transition: background 0.15s; }
@@ -1180,12 +1179,15 @@ select option {
   background: var(--bg);
 }
 .schema-preview-table {
-  width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed;
+  width: 100%; border-spacing: 0; font-size: 12px; table-layout: fixed;
+}
+.schema-preview-table thead {
+  position: sticky; top: 0; z-index: 1;
 }
 .schema-preview-table th {
-  position: sticky; top: 0; background: var(--bg-card); padding: 4px 6px;
+  background: var(--bg-card); padding: 4px 6px;
   text-align: left; border-bottom: 2px solid var(--accent); font-weight: 600;
-  color: var(--text-bright); z-index: 1; font-size: 11px; user-select: none;
+  color: var(--text-bright); font-size: 11px; user-select: none;
   max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .schema-preview-table .draggable-col { cursor: grab; position: relative; }
