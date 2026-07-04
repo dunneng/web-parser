@@ -101,8 +101,6 @@
       <div class="panel-actions">
         <button id="btnElementPicker" class="btn btn-sm btn-accent hidden" title="元素提取">元素提取</button>
         <button id="btnManagePicked" class="btn btn-sm btn-primary hidden" title="查看已选元素">管理已选</button>
-        <button id="btnRuleModeList" class="btn btn-sm hidden" title="切换到列表页">列表</button>
-        <button id="btnRuleModeDetail" class="btn btn-sm hidden" title="切换到详情页">详情</button>
         <button id="btnRefresh" class="btn btn-sm" title="刷新页面">刷新</button>
       </div>
     </div>
@@ -345,6 +343,8 @@
       <div class="picker-info">
         <span class="picker-indicator">元素提取模式</span>
         <span id="pickedCount">已选: 0 项</span>
+        <button id="btnRuleModeList" class="picker-mode-btn active" title="列表页规则模式">列表</button>
+        <button id="btnRuleModeDetail" class="picker-mode-btn" title="详情页规则模式">详情</button>
         <span class="picker-mode-switch">
           <button id="btnPickModeClick" class="picker-mode-btn active" title="点击选择">点选</button>
           <button id="btnPickModeDrag" class="picker-mode-btn" title="拖拽框选">框选</button>
@@ -627,7 +627,7 @@
     <div class="modal-footer">
       <button id="btnBatchCancel" class="btn btn-sm">取消</button>
       <button id="btnApiSend" class="btn btn-sm btn-accent hidden">发送</button>
-      <button id="btnBatchConfirm" class="btn btn-sm btn-accent">加载首链</button>
+      <button id="btnBatchConfirm" class="btn btn-sm btn-accent hidden">加载首链</button>
     </div>
   </div>
 </div>

@@ -95,39 +95,13 @@ window.Parser = window.Parser || {};
       var raw = (document.getElementById('batchUrlList').value || '').trim();
       var firstUrl = raw ? raw.split('\n')[0].trim() : '';
       if (!raw) { setStatus('URL列表为空'); return; }
-      
-      // 创建批量任务（供后续 batchLoadAll 使用）
-      var lines = raw.split(/[\n]+/).map(function(s) { return s.trim(); }).filter(Boolean);
-      S.batchTasks = [];
-      S.batchAllResults = [];
-      S.batchTaskIdCounter = 0;
-      var ps = parseInt(document.getElementById('batchUrlListPageStart') ? document.getElementById('batchUrlListPageStart').value : 1) || 1;
-      var pe = parseInt(document.getElementById('batchUrlListPageEnd') ? document.getElementById('batchUrlListPageEnd').value : 1) || 1;
-      lines.forEach(function(line) {
-        if (/\{page\}/.test(line)) {
-          for (var p = ps; p <= pe; p++) {
-            S.batchTasks.push({ id: ++S.batchTaskIdCounter, url: line.replace(/\{page\}/g, p), q: line, page: p, status: 'pending', rowCount: 0 });
-          }
-        } else {
-          S.batchTasks.push({ id: ++S.batchTaskIdCounter, url: line, q: line, page: '-', status: 'pending', rowCount: 0 });
-        }
-      });
-      
+      // 仅加载首链，不创建任务
       if (firstUrl) document.getElementById('webview').loadURL(firstUrl);
       closeBatchModal();
-      document.getElementById('batchTagsPanel').classList.remove('hidden');
-      var loadAllBtn = document.getElementById('btnBatchLoadAll');
-      if (loadAllBtn) loadAllBtn.classList.remove('hidden');
-      renderBatchTags();
-            // 自动切到详情模式
-      if (window.Parser && window.Parser.state) {
-        window.Parser.state._ruleMode = 'detail';
-        var bl = document.getElementById('btnRuleModeList');
-        var bd = document.getElementById('btnRuleModeDetail');
-        if (bl) bl.classList.remove('active');
-        if (bd) bd.classList.add('active');
-      }
-      setStatus(firstUrl ? '已加载首链（' + S.batchTasks.length + '个任务），点「全部加载」批量存快照' : 'URL列表为空');
+      document.getElementById('btnBatchConfirm').classList.add('hidden');
+      document.getElementById('btnBatchLoadAll').classList.remove('hidden');
+      document.getElementById('btnGo').classList.add('hidden');
+      setStatus('已加载首链，请点「元素提取」框选元素');
     });
     document.getElementById("btnBatchLoadAll").addEventListener('click', batchLoadAll);
     document.getElementById("btnBatchClearDone").addEventListener('click', batchClearDone);
@@ -330,6 +304,11 @@ window.Parser = window.Parser || {};
   window.openBatchModal = openBatchModal;
   function openBatchModal() {
     document.getElementById("batchModal").classList.remove('hidden');
+    // 有URL时显示按钮
+    var raw = (document.getElementById('batchUrlList').value || '').trim();
+    if (raw) {
+      document.getElementById('btnBatchConfirm').classList.remove('hidden');
+    }
     var ta = $('#batchUrlTemplate');
     ta.style.height = 'auto';
     ta.style.height = ta.scrollHeight + 'px';
@@ -891,7 +870,20 @@ window.Parser = window.Parser || {};
 
   async function batchLoadAll() {
     if (S.batchLoadRunning) { S.batchLoadCancel = true; return; }
+    // 任务列表为空 → 从URL列表创建
+    if (!S.batchTasks || S.batchTasks.length === 0) {
+      var raw = (document.getElementById('batchUrlList').value || '').trim();
+      if (!raw) { setStatus('URL列表为空'); return; }
+      var lines = raw.split(/[\n]+/).map(function(s) { return s.trim(); }).filter(Boolean);
+      S.batchTasks = []; S.batchAllResults = []; S.batchTaskIdCounter = 0;
+      lines.forEach(function(line) {
+        S.batchTasks.push({ id: ++S.batchTaskIdCounter, url: line, q: line, page: '-', status: 'pending', rowCount: 0 });
+      });
+      document.getElementById('batchTagsPanel').classList.remove('hidden');
+      renderBatchTags();
+    }
     S.batchLoadRunning = true;
+    document.getElementById('btnGo').classList.add('hidden');
     S.batchLoadCancel = false;
     S.batchLoadPaused = false;
     // 显示浮窗
@@ -1383,6 +1375,7 @@ window.Parser = window.Parser || {};
       setStatus('批量抓取已停止');
     }
     S.batchLoadRunning = false;
+    document.getElementById('btnGo').classList.remove('hidden');
     document.getElementById("btnBatchLoadAll").textContent = '全部加载';
     document.getElementById("btnBatchLoadAll").style.background = '';
     document.getElementById("btnBatchLoadAll").style.borderColor = '';

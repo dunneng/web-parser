@@ -531,6 +531,7 @@ select option {
   width: 360px;
   max-height: 300px;
   overflow-y: auto;
+  z-index: 10002;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 8px;

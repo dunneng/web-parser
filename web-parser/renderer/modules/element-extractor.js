@@ -2982,6 +2982,10 @@ window.Parser = window.Parser || {};
     if (source === 'pick' || source === 'auto') {
       _scheduleAutoRegister();
     }
+    // 手动框选/点选 → 自动加入剪贴板
+    if (source === 'pick' && selector && window._addToClipboard) {
+      window._addToClipboard(selector, '手动提取');
+    }
     // pick 来源自动填入批量弹框选择器行（首行填满则追加新行）
     if (source === 'pick' && selector) {
       var allSels = document.querySelectorAll('.batch-dlg-selector');
