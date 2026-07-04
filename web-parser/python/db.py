@@ -911,11 +911,20 @@ def list_chain_schemes_with_data() -> list[str]:
 # ═══════════════════════════════════════════
 
 def save_page_snapshot(url: str, html: str) -> dict:
-    """保存一页的 HTML 快照，同 URL 覆盖旧记录"""
+    """保存 HTML 快照，URL+内容哈希双重去重"""
+    import hashlib
+    content_hash = hashlib.sha256(html.encode('utf-8', errors='replace')).hexdigest()
     now = _now_iso()
     with get_db() as db:
-        existing = db.execute("SELECT id FROM page_snapshots WHERE url=?", (url,)).fetchone()
+        # 同URL但不同内容 → 删除旧记录
+        existing = db.execute("SELECT id, html FROM page_snapshots WHERE url=?", (url,)).fetchone()
         if existing:
+            old_hash = hashlib.sha256(existing["html"].encode('utf-8', errors='replace')).hexdigest()
+            if old_hash == content_hash:
+                # 完全一致，跳过
+                total = db.execute("SELECT COUNT(*) as cnt FROM page_snapshots").fetchone()["cnt"]
+                return {"ok": True, "total_snapshots": total, "skipped": True}
+            # 内容变了，更新
             db.execute("UPDATE page_snapshots SET html=?, created_at=? WHERE id=?",
                        (html, now, existing["id"]))
         else:
