@@ -7743,9 +7743,8 @@ window._editorCollapseAll = function() {
       if (fields.length === 0) continue;
 
       var result;
-      var isBase = (ci === 0);
-      // 只勾一个方案 + 有快照 → 走快照；多方案时方案0走webview
-      var useSnapshots = (!isBase && pageSnapshots.length > 0) || (checked.length === 1 && pageSnapshots.length > 0);
+      // 有快照就走快照，没快照才走 webview
+      var useSnapshots = pageSnapshots.length > 0;
       if (useSnapshots) {
         result = { rows: [], headers: [], totalRows: 0 };
         for (var si = 0; si < pageSnapshots.length; si++) {

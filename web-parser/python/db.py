@@ -911,13 +911,18 @@ def list_chain_schemes_with_data() -> list[str]:
 # ═══════════════════════════════════════════
 
 def save_page_snapshot(url: str, html: str) -> dict:
-    """保存一页的 HTML 快照（逐次追加，不去重）"""
+    """保存一页的 HTML 快照，同 URL 覆盖旧记录"""
     now = _now_iso()
     with get_db() as db:
-        db.execute(
-            "INSERT INTO page_snapshots (url, html, created_at) VALUES (?,?,?)",
-            (url, html, now)
-        )
+        existing = db.execute("SELECT id FROM page_snapshots WHERE url=?", (url,)).fetchone()
+        if existing:
+            db.execute("UPDATE page_snapshots SET html=?, created_at=? WHERE id=?",
+                       (html, now, existing["id"]))
+        else:
+            db.execute(
+                "INSERT INTO page_snapshots (url, html, created_at) VALUES (?,?,?)",
+                (url, html, now)
+            )
         total = db.execute("SELECT COUNT(*) as cnt FROM page_snapshots").fetchone()["cnt"]
     return {"ok": True, "total_snapshots": total}
 
