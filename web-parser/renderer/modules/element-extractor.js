@@ -59,6 +59,11 @@ window.Parser = window.Parser || {};
   async function startPickMode() {
     if (_startPickLock) { console.log('[startPickMode] locked, skip'); return; }
     _startPickLock = true;
+    // 保存当前页面URL（列表页URL，供切回列表模式使用）
+    if (window.Parser && window.Parser.state && !window.Parser.state._listPageUrl) {
+      var wv = document.getElementById('webview');
+      if (wv) window.Parser.state._listPageUrl = wv.getURL();
+    }
     // 清理旧的轮询定时器（防止刷新/重注时重复创建）
     if (window._pickerPollTimer) { clearInterval(window._pickerPollTimer); window._pickerPollTimer = null; }
     stopBoxClickPoll();
@@ -71,8 +76,12 @@ window.Parser = window.Parser || {};
     // 如果还没存过快照，保存当前页（第一页自动存）
     _saveEntrySnapshotIfFirst().catch(function(){});
 
-    // 预加载已保存规则
-    var savedRules = (window.Parser && window.Parser.state && window.Parser.state.savedSelectorRules) || [];
+    // 预加载已保存规则（按当前模式过滤）
+    var allSavedRules = (window.Parser && window.Parser.state && window.Parser.state.savedSelectorRules) || [];
+    var currentMode = (window.Parser && window.Parser.state && window.Parser.state._ruleMode) || 'list';
+    var savedRules = allSavedRules.filter(function(r) {
+      return !r.mode || r.mode === currentMode; // 旧规则无 mode 字段全部保留
+    });
     var rulesJson = JSON.stringify(savedRules);
 
     // 轮询：读取队列中的新选中元素
@@ -1050,7 +1059,9 @@ window.Parser = window.Parser || {};
   // 自动匹配已保存的选择器规则到当前页面（仅画虚线框，不更新编辑器）
   async function autoApplySavedRules() {
     try {
-      var rules = (window.Parser && window.Parser.state && window.Parser.state.savedSelectorRules) || [];
+      var allRules = (window.Parser && window.Parser.state && window.Parser.state.savedSelectorRules) || [];
+      var currentMode = (window.Parser && window.Parser.state && window.Parser.state._ruleMode) || 'list';
+      var rules = allRules.filter(function(r) { return !r.mode || r.mode === currentMode; });
       if (!rules || rules.length === 0) return;
       var webview = document.getElementById("webview");
       var currentUrl = webview.getURL();

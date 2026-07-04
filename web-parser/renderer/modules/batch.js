@@ -91,7 +91,44 @@ window.Parser = window.Parser || {};
         batchUrlFileInput.value = '';
       });
     }
-    document.getElementById("btnBatchConfirm").addEventListener('click', confirmBatchConfig);
+    document.getElementById("btnBatchConfirm").addEventListener('click', function() {
+      var raw = (document.getElementById('batchUrlList').value || '').trim();
+      var firstUrl = raw ? raw.split('\n')[0].trim() : '';
+      if (!raw) { setStatus('URL列表为空'); return; }
+      
+      // 创建批量任务（供后续 batchLoadAll 使用）
+      var lines = raw.split(/[\n]+/).map(function(s) { return s.trim(); }).filter(Boolean);
+      S.batchTasks = [];
+      S.batchAllResults = [];
+      S.batchTaskIdCounter = 0;
+      var ps = parseInt(document.getElementById('batchUrlListPageStart') ? document.getElementById('batchUrlListPageStart').value : 1) || 1;
+      var pe = parseInt(document.getElementById('batchUrlListPageEnd') ? document.getElementById('batchUrlListPageEnd').value : 1) || 1;
+      lines.forEach(function(line) {
+        if (/\{page\}/.test(line)) {
+          for (var p = ps; p <= pe; p++) {
+            S.batchTasks.push({ id: ++S.batchTaskIdCounter, url: line.replace(/\{page\}/g, p), q: line, page: p, status: 'pending', rowCount: 0 });
+          }
+        } else {
+          S.batchTasks.push({ id: ++S.batchTaskIdCounter, url: line, q: line, page: '-', status: 'pending', rowCount: 0 });
+        }
+      });
+      
+      if (firstUrl) document.getElementById('webview').loadURL(firstUrl);
+      closeBatchModal();
+      document.getElementById('batchTagsPanel').classList.remove('hidden');
+      var loadAllBtn = document.getElementById('btnBatchLoadAll');
+      if (loadAllBtn) loadAllBtn.classList.remove('hidden');
+      renderBatchTags();
+            // 自动切到详情模式
+      if (window.Parser && window.Parser.state) {
+        window.Parser.state._ruleMode = 'detail';
+        var bl = document.getElementById('btnRuleModeList');
+        var bd = document.getElementById('btnRuleModeDetail');
+        if (bl) bl.classList.remove('active');
+        if (bd) bd.classList.add('active');
+      }
+      setStatus(firstUrl ? '已加载首链（' + S.batchTasks.length + '个任务），点「全部加载」批量存快照' : 'URL列表为空');
+    });
     document.getElementById("btnBatchLoadAll").addEventListener('click', batchLoadAll);
     document.getElementById("btnBatchClearDone").addEventListener('click', batchClearDone);
     document.getElementById("btnBatchContinue").addEventListener('click', batchContinue);
@@ -634,14 +671,6 @@ window.Parser = window.Parser || {};
     document.getElementById("btnBatchLoadAll").classList.remove('hidden');
     renderBatchTags();
     fitBatchPanelToTree();
-    // 自动加载第一个任务 URL 到 webview，方便直接进提取模式
-    if (S.batchTasks.length > 0 && S.batchTasks[0].url) {
-      var firstUrl = S.batchTasks[0].url;
-      var urlInput = document.getElementById("urlInput");
-      if (urlInput) urlInput.value = firstUrl;
-      var wv = document.getElementById("webview");
-      if (wv) wv.loadURL(firstUrl);
-    }
     setStatus('已生成 ' + S.batchTasks.length + ' 个抓取任务');
 
     hideAllPanels();
@@ -833,7 +862,8 @@ window.Parser = window.Parser || {};
   function updateBatchFloat() {
     var el = document.getElementById("paginationFloat");
     if (!el) return;
-    // 批量模式：显示批量控件，隐藏采集控件
+    
+// 批量模式：显示批量控件，隐藏采集控件
     var isBatch = (S.batchTasks && S.batchTasks.length > 0) || (S.batchLoadRunning);
     el.classList.toggle('pf-batch-mode', isBatch);
     el.classList.toggle('pf-collect-mode', !isBatch);
@@ -1215,6 +1245,23 @@ window.Parser = window.Parser || {};
           }
         } catch(e) {}
         S.currentHtml = await document.getElementById("webview").executeJavaScript('document.documentElement.outerHTML');
+        // 保存为页面快照（供链路提取使用）
+        try {
+          await fetch('http://127.0.0.1:' + S.pythonPort + '/api/page-snapshots/save', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({url: t.url, html: S.currentHtml})
+          });
+        } catch(e) {}
+        // URL列表模式：存完快照直接标记完成，跳过提取
+        if (!t.extractMode && !t.selector && !t.chainSchema) {
+          t.status = 'done';
+          t.rowCount = 1;
+          t.results = [{ '页面': t.url, '字符数': (S.currentHtml || '').length }];
+          setStatus('[' + (i+1) + '/' + S.batchTasks.length + '] 快照已存');
+          renderBatchTags();
+          updateBatchFloat();
+          continue;
+        }
         if (S.currentHtml) {
           // ── 多级状态检测 ──
           if (!/^local-html:\/\//i.test(t.url)) {
@@ -1352,7 +1399,7 @@ window.Parser = window.Parser || {};
   }
 
   function batchContinue() {
-    if (S.batchLoadRunning) return;
+    // 恢复暂停的批量加载
     S.batchLoadPaused = false;
     var pfPause = document.getElementById("pfPause");
     if (pfPause) {

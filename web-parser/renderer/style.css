@@ -613,6 +613,7 @@ select option {
 }
 .schema-footer-row {
   display: flex; justify-content: flex-end; gap: 8px;
+  flex-shrink: 0;
 }
 .form-group { display: flex; flex-direction: column; gap: 8px; }
 .form-label { font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 2px; }

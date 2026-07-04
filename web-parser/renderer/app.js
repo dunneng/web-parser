@@ -711,6 +711,31 @@ window._editorCollapseAll = function() {
     Parser.batch.bindEvents();
     Parser.extractor.bindEnhancedPickerEvents();
     bindSchemaEvents();
+    _bindExportLinksBtn();
+    // 规则模式切换
+    Parser.state._ruleMode = Parser.state._ruleMode || 'list';
+    var btnList = document.getElementById('btnRuleModeList');
+    var btnDetail = document.getElementById('btnRuleModeDetail');
+    if (btnList && btnDetail) {
+      btnList.addEventListener('click', function() {
+        btnList.classList.add('active'); btnDetail.classList.remove('active');
+        Parser.state._ruleMode = 'list';
+        if (Parser.state._listPageUrl) {
+          document.getElementById('webview').loadURL(Parser.state._listPageUrl);
+          setStatus('已切换到列表模式');
+        }
+      });
+      btnDetail.addEventListener('click', function() {
+        btnDetail.classList.add('active'); btnList.classList.remove('active');
+        Parser.state._ruleMode = 'detail';
+        var batchArea = document.getElementById('batchUrlList');
+        var firstUrl = batchArea ? (batchArea.value||'').trim().split('\n')[0] : '';
+        if (firstUrl) {
+          document.getElementById('webview').loadURL(firstUrl);
+          setStatus('已切换到详情模式');
+        }
+      });
+    }
     // 菜单栏动作
     window.api.onMenuAction(function(action, arg) {
       if (action === 'clipboard') showClipboardPicker();
@@ -913,6 +938,8 @@ window._editorCollapseAll = function() {
     btnFetch.classList.remove('hidden');
     btnElementPicker.classList.remove('hidden');
     btnManagePickedHeader.classList.remove('hidden');
+    var _rml=document.getElementById('btnRuleModeList'); if(_rml)_rml.classList.remove('hidden');
+    var _rmd=document.getElementById('btnRuleModeDetail'); if(_rmd)_rmd.classList.remove('hidden');
     // 预注入 stealth 配置（在 preload 运行前尽可能早）
     var host = extractHost(url);
     Parser.stealth.injectStealthConfig(host);
@@ -3763,7 +3790,8 @@ window._editorCollapseAll = function() {
           rules.push({
             selector: sel,
             tag: c.elementInfo ? c.elementInfo.tag : '',
-            label: c.elementInfo ? c.elementInfo.text : ''
+            label: c.elementInfo ? c.elementInfo.text : '',
+            mode: Parser.state._ruleMode || 'list'
           });
         });
       } else {
@@ -5260,6 +5288,8 @@ window._editorCollapseAll = function() {
     btnFetch.classList.remove('hidden');
     btnElementPicker.classList.remove('hidden');
     btnManagePickedHeader.classList.remove('hidden');
+    var _rml=document.getElementById('btnRuleModeList'); if(_rml)_rml.classList.remove('hidden');
+    var _rmd=document.getElementById('btnRuleModeDetail'); if(_rmd)_rmd.classList.remove('hidden');
     collector.active = true;
     collector.tab = tab;
     collector.subMode = subMode;
@@ -7452,6 +7482,7 @@ window._editorCollapseAll = function() {
     schemaModal.classList.remove('hidden');
     // 刷新剪贴板面板（显示子链路提示）
     renderClipboardPanel();
+    _refreshExportLinksBtn();
   }
 
   /** 关闭弹窗 */
@@ -7459,6 +7490,75 @@ window._editorCollapseAll = function() {
     schemaModal.classList.add('hidden');
     // 刷新剪贴板面板（隐藏子链路提示）
     renderClipboardPanel();
+  }
+
+  // ──────── 导出链接到批量 ────────
+  function _refreshExportLinksBtn() {
+    var row = document.getElementById('schemaSecondaryRow');
+    var linkSel = document.getElementById('secLinkCol');
+    var schemeSel = document.getElementById('secScheme');
+    if (!row || !linkSel || !schemeSel) return;
+    // 从快速预览取列名
+    var preview = Parser.state.schemaPreviewData;
+    var headers = preview && preview.headers ? preview.headers.filter(function(k) { return k.charAt(0) !== '_'; }) : [];
+    if (headers.length === 0) { row.style.display = 'none'; return; }
+    row.style.display = 'flex';
+    // 填充链接列下拉
+    var current = linkSel.value;
+    linkSel.innerHTML = '<option value="">链接列</option>';
+    headers.forEach(function(k) {
+      var isLink = /链接|url|href/i.test(k);
+      var sel = (k === current || (!current && isLink)) ? ' selected' : '';
+      linkSel.innerHTML += '<option value="' + k + '"' + sel + '>' + k + '</option>';
+    });
+    // 填充方案下拉
+    var currentScheme = schemeSel.value;
+    var schemes = Parser.state.chainSchemes || [];
+    schemeSel.innerHTML = '<option value="">方案</option>';
+    schemes.forEach(function(s) {
+      var sel = (s.name === currentScheme) ? ' selected' : '';
+      schemeSel.innerHTML += '<option value="' + escapeHtml(s.name) + '"' + sel + '>' + escapeHtml(s.name) + '</option>';
+    });
+  }
+
+  function _bindExportLinksBtn() {
+    var btn = document.getElementById('btnExportLinks');
+    if (!btn || btn._bound) return;
+    btn._bound = true;
+    // 方案下拉切换 → 加载方案到编辑器
+    var schemeSel = document.getElementById('secScheme');
+    if (schemeSel) {
+      schemeSel.addEventListener('change', function() {
+        var name = this.value;
+        if (!name) return;
+        var schemes = Parser.state.chainSchemes || [];
+        var idx = schemes.findIndex(function(s) { return s.name === name; });
+        if (idx >= 0) {
+          chainLoadScheme(idx);
+          var linkSel = document.getElementById('secLinkCol');
+          if (linkSel) linkSel.value = '';
+          setTimeout(function() { 
+            autoRefreshChainPreview(); 
+            setTimeout(function() { _refreshExportLinksBtn(); }, 500);
+          }, 200);
+        }
+      });
+    }
+    btn.addEventListener('click', function() {
+      var linkCol = document.getElementById('secLinkCol').value;
+      if (!linkCol) { setStatus('请选择链接列'); return; }
+      var preview = Parser.state.schemaPreviewData;
+      if (!preview || !preview.rows || preview.rows.length === 0) { setStatus('快速预览无数据，请先解析链路'); return; }
+      var urls = preview.rows.map(function(r) { return (r[linkCol] || '').trim(); }).filter(function(u) { return u && /^https?:\/\//.test(u); });
+      if (urls.length === 0) { setStatus('没有有效URL'); return; }
+      var batchArea = document.getElementById('batchUrlList');
+      if (batchArea) {
+        batchArea.value = urls.join('\n');
+        var batchPanel = document.getElementById('batchTagsPanel');
+        if (batchPanel) batchPanel.classList.remove('hidden');
+      }
+      setStatus('已导出 ' + urls.length + ' 个链接到批量面板');
+    });
   }
 
   /** Tab 切换 */
@@ -9864,6 +9964,7 @@ window._editorCollapseAll = function() {
           return;
         }
         Parser.state.schemaPreviewData = result;
+        _refreshExportLinksBtn();
         var totalRows = result.totalRows || 0;
         var headers = result.headers || [];
         var counts = result.counts || [];
@@ -10303,13 +10404,57 @@ window._editorCollapseAll = function() {
           (r.headers || []).forEach(function(h) { if (allHeaders.indexOf(h) < 0) allHeaders.push(h); });
         });
         var mergedRows = [];
-        allResults.forEach(function(r) {
-          (r.rows || []).forEach(function(srcRow) {
-            var row = {};
-            allHeaders.forEach(function(h) { row[h] = srcRow[h] !== undefined ? srcRow[h] : ''; });
-            mergedRows.push(row);
+        // 多方案合并：按链接列匹配合并（详情列加前缀）
+        if (allResults.length >= 2) {
+          var linkCol = null;
+          allResults[0].headers.forEach(function(h) {
+            if (/链接|url|href/i.test(h)) {
+              var foundInAll = allResults.every(function(r) { return (r.headers || []).indexOf(h) >= 0; });
+              if (foundInAll) linkCol = h;
+            }
           });
-        });
+          if (linkCol) {
+            var baseRows = allResults[0].rows || [];
+            for (var bi = 1; bi < allResults.length; bi++) {
+              var nextRows = allResults[bi].rows || [];
+              var nextHeaders = allResults[bi].headers || [];
+              var idx = {};
+              nextRows.forEach(function(nr) { if (nr[linkCol]) idx[nr[linkCol]] = nr; });
+              var prefix = (checked[bi] && checked[bi].name) ? checked[bi].name : ('方案' + (bi + 1));
+              nextHeaders.forEach(function(h) {
+                if (h !== linkCol && allHeaders.indexOf('【' + prefix + '-' + h + '】') < 0) {
+                  allHeaders.push('【' + prefix + '-' + h + '】');
+                }
+              });
+              baseRows.forEach(function(br) {
+                var key = br[linkCol];
+                var match = key ? idx[key] : null;
+                nextHeaders.forEach(function(h) {
+                  if (h !== linkCol) {
+                    br['【' + prefix + '-' + h + '】'] = match ? (match[h] || '') : '';
+                  }
+                });
+              });
+            }
+            mergedRows = baseRows;
+          } else {
+            allResults.forEach(function(r) {
+              (r.rows || []).forEach(function(srcRow) {
+                var row = {};
+                allHeaders.forEach(function(h) { row[h] = srcRow[h] !== undefined ? srcRow[h] : ''; });
+                mergedRows.push(row);
+              });
+            });
+          }
+        } else {
+          allResults.forEach(function(r) {
+            (r.rows || []).forEach(function(srcRow) {
+              var row = {};
+              allHeaders.forEach(function(h) { row[h] = srcRow[h] !== undefined ? srcRow[h] : ''; });
+              mergedRows.push(row);
+            });
+          });
+        }
         hideAllPanels();
         queryContainer.classList.remove('hidden');
         queryContainer.dataset.mode = 'schema-extract';
