@@ -23,11 +23,9 @@ window.Parser = window.Parser || {};
     if (btnReg) btnReg.addEventListener('click', registerElements);
   }
 
-  // 进入提取模式时清旧快照并存当前页
-  async function _resetAndSaveSnapshot() {
+  // 进入提取模式时存当前页（去重自动跳过重复）
+  async function _saveEntrySnapshot() {
     try {
-      // 清空旧快照
-      await fetch('http://127.0.0.1:' + (window.Parser.state.pythonPort || 19527) + '/api/page-snapshots', { method: 'DELETE' });
       var wv = document.getElementById('webview');
       if (!wv) return;
       var html = await wv.executeJavaScript('document.documentElement.outerHTML');
@@ -69,7 +67,7 @@ window.Parser = window.Parser || {};
     S.editorItems = [];
     S.pickedElements = [];
     _editorDedupMap = null;
-    _resetAndSaveSnapshot().catch(function(){});
+    _saveEntrySnapshot().catch(function(){});
 
     // 预加载已保存规则（按当前模式过滤）
     var allSavedRules = (window.Parser && window.Parser.state && window.Parser.state.savedSelectorRules) || [];
