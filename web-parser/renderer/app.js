@@ -7657,6 +7657,7 @@ window._editorCollapseAll = function() {
       if (divider) divider.style.display = 'none';
       if (configRow) configRow.style.display = 'none';
       if (traceResult) traceResult.classList.add('hidden');
+      _resetTraceStripCheckboxes();
       var nameInput = document.getElementById('chainSchemaName');
       if (nameInput) nameInput.value = '';
       Parser.state._editingChainSchemeIdx = null;
@@ -7708,6 +7709,14 @@ window._editorCollapseAll = function() {
     }).catch(function(){});
   }
 
+  /** 重置溯源面板的过滤复选框 */
+  function _resetTraceStripCheckboxes() {
+    var idCb = document.getElementById('chainStripIdTrace');
+    if (idCb) idCb.checked = false;
+    var bareCb = document.getElementById('chainStripBareTrace');
+    if (bareCb) bareCb.checked = false;
+  }
+
   /** 从方案列表提取数据: ci=0→webview, ci>=1→快照。返回 allResults，支持 signal 取消 */
   async function _extractFromSchemas(checked, signal) {
     var wv = document.getElementById('webview');
@@ -7735,7 +7744,9 @@ window._editorCollapseAll = function() {
 
       var result;
       var isBase = (ci === 0);
-      if (!isBase && pageSnapshots.length > 0) {
+      // 只勾一个方案 + 有快照 → 走快照；多方案时方案0走webview
+      var useSnapshots = (!isBase && pageSnapshots.length > 0) || (checked.length === 1 && pageSnapshots.length > 0);
+      if (useSnapshots) {
         result = { rows: [], headers: [], totalRows: 0 };
         for (var si = 0; si < pageSnapshots.length; si++) {
           var snap = pageSnapshots[si];
@@ -7765,22 +7776,13 @@ window._editorCollapseAll = function() {
           } catch(e) { if (e.name === 'AbortError') throw e; }
         }
       } else {
+        // 从当前 webview 提取
         var html = await wv.executeJavaScript('document.documentElement.outerHTML');
         if (!html) continue;
         var fetchOpts2 = { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ html: html, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '', fields: fields, child_delim: schema.childDelimiter || '' }) };
         if (signal) fetchOpts2.signal = signal;
-        var apiResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', fetchOpts2);
-        result = await apiResp.json();
-        if (result && result.rows && isBase) {
-          if (!result.headers) result.headers = [];
-          if (!result.headers.some(function(h) { return /链接|^link$|url|href/i.test(h); })) {
-            var curUrl = wv.getURL();
-            var srcCol2 = '来源URL';
-            result.rows.forEach(function(r) { r[srcCol2] = curUrl || ''; });
-            if (result.headers.indexOf(srcCol2) < 0) result.headers.push(srcCol2);
-          }
-        }
+        result = await (await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', fetchOpts2)).json();
       }
       if (result && !result.error && result.rows && result.rows.length > 0) {
         allResults.push(result);
@@ -10057,25 +10059,62 @@ window._editorCollapseAll = function() {
         if (schemaPreviewWrap) schemaPreviewWrap.innerHTML = '';
         return;
       }
-      // 调 Python 后端提取（只用当前 webview 页面，不走快照）
+      // 调 Python 后端提取（有快照走快照，否则走当前 webview）
       try {
         var wv = document.getElementById('webview');
         if (!wv) { resetChainCounts(); return; }
-        var html = await wv.executeJavaScript('document.documentElement.outerHTML');
-        if (!html) { resetChainCounts(); return; }
-        var resp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            html: html,
-            chain_type: schema.chainType || 'css',
-            deepest_selector: schema.deepestSelector || '',
-            fields: schema.fields,
-            child_delim: schema.childDelimiter || ''
-          })
-        });
-        var result = await resp.json();
-        if (result && !result.error && result.rows) {
-          result.totalRows = result.rows.length;
+        // 检查快照
+        var snapList = [];
+        try {
+          var slResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list');
+          if (slResp.ok) {
+            var slData = await slResp.json();
+            snapList = slData.snapshots || [];
+          }
+        } catch(e) {}
+        var result;
+        if (snapList.length > 0) {
+          // 有快照 → 逐页提取并合并
+          var mergedRows = [], mergedHeaders = [], mergedCounts = [];
+          for (var si = 0; si < snapList.length; si++) {
+            var snap = snapList[si];
+            try {
+              var shResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/' + snap.id + '/html');
+              if (!shResp.ok) continue;
+              var shData = await shResp.json();
+              var snapHtml = shData.html;
+              if (!snapHtml) continue;
+              var resp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  html: snapHtml, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '',
+                  fields: schema.fields, child_delim: schema.childDelimiter || ''
+                })
+              });
+              var pageResult = await resp.json();
+              if (pageResult && !pageResult.error && pageResult.rows) {
+                mergedRows = mergedRows.concat(pageResult.rows);
+                if (!mergedHeaders.length && pageResult.headers) mergedHeaders = pageResult.headers;
+                if (pageResult.counts) mergedCounts = pageResult.counts;
+              }
+            } catch(e) {}
+          }
+          result = { rows: mergedRows, headers: mergedHeaders, counts: mergedCounts, totalRows: mergedRows.length };
+        } else {
+          // 无快照 → 只取当前页
+          var html = await wv.executeJavaScript('document.documentElement.outerHTML');
+          if (!html) { resetChainCounts(); return; }
+          var resp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              html: html, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '',
+              fields: schema.fields, child_delim: schema.childDelimiter || ''
+            })
+          });
+          result = await resp.json();
+          if (result && !result.error && result.rows) {
+            result.totalRows = result.rows.length;
+          }
         }
         if (!result || result.error) {
           schemaPreviewInfo.textContent = result ? result.error : '';
@@ -10636,6 +10675,7 @@ window._editorCollapseAll = function() {
       Parser.state.chainSegments = [];
       Parser.state._selectedChainPath = null;
       _expandedChains = {};
+      _resetTraceStripCheckboxes();
       if (nameInput3) nameInput3.value = name || '';  // 保留名称，不清空
       renderChainTree();
       var body = document.getElementById('chainEditorBody');
