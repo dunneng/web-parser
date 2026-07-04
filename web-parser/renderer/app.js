@@ -8029,13 +8029,16 @@ window._editorCollapseAll = function() {
   }
 
   /** 对 trace 生成的链路应用过滤选项 */
+  /** 主面板过滤选项（不 fallback 到溯源面板） */
   function getStripCheckboxes() {
-    var id = document.getElementById('chainStripId') || document.getElementById('chainStripIdTrace');
-    var bare = document.getElementById('chainStripBare') || document.getElementById('chainStripBareTrace');
-    return { id: id, bare: bare };
+    return { id: document.getElementById('chainStripId'), bare: document.getElementById('chainStripBare') };
+  }
+  /** 溯源面板过滤选项 */
+  function getTraceStripCheckboxes() {
+    return { id: document.getElementById('chainStripIdTrace'), bare: document.getElementById('chainStripBareTrace') };
   }
   function applyTraceFilters(chain, type) {
-    var cbs = getStripCheckboxes();
+    var cbs = getTraceStripCheckboxes();
     var stripId = cbs.id;
     var stripBare = cbs.bare;
     if (type === 'xpath') {
