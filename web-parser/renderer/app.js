@@ -7699,7 +7699,90 @@ window._editorCollapseAll = function() {
 
   var _chainFetchAbort = null;  // 防止快速切换竞态
 
-  /** 多方案实时合并：不走 DB，直接走 live extraction（与"保存并查询"同逻辑） */
+  /** 从方案列表提取数据: ci=0→webview, ci>=1→快照。返回 allResults，支持 signal 取消 */
+  async function _extractFromSchemas(checked, signal) {
+    var wv = document.getElementById('webview');
+    // 获取页面快照列表
+    var pageSnapshots = [];
+    try {
+      var slResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list', signal ? { signal: signal } : {});
+      if (slResp.ok) {
+        var slData = await slResp.json();
+        pageSnapshots = slData.snapshots || [];
+      }
+    } catch(e) {}
+
+    // 快照 HTML 缓存（避免重复拉取）
+    if (!Parser.state._snapHtmlCache) Parser.state._snapHtmlCache = {};
+    var snapCache = Parser.state._snapHtmlCache;
+
+    var allResults = [];
+    for (var ci = 0; ci < checked.length; ci++) {
+      var cs = checked[ci];
+      var schema = cs.schema;
+      if (!schema || !schema.fields || schema.fields.length === 0) continue;
+      var fields = schema.fields.filter(function(f) { return f.isText || f.childText || (f.attr && f.attr.trim()); });
+      if (fields.length === 0) continue;
+
+      var result;
+      var isBase = (ci === 0);
+      if (!isBase && pageSnapshots.length > 0) {
+        result = { rows: [], headers: [], totalRows: 0 };
+        for (var si = 0; si < pageSnapshots.length; si++) {
+          var snap = pageSnapshots[si];
+          try {
+            if (!snapCache[snap.id]) {
+              var hResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/' + snap.id + '/html', signal ? { signal: signal } : {});
+              if (hResp.ok) {
+                var hData = await hResp.json();
+                if (hData.html) snapCache[snap.id] = hData.html;
+              }
+            }
+            var snapHtml = snapCache[snap.id];
+            if (!snapHtml) continue;
+            var apiResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ html: snapHtml, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '', fields: fields, child_delim: schema.childDelimiter || '' }),
+              signal: signal
+            });
+            var pageResult = await apiResp.json();
+            if (pageResult && !pageResult.error && pageResult.rows) {
+              var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
+              pageResult.rows.forEach(function(r) { r[srcUrlCol] = snap.url || ''; });
+              if (pageResult.headers.indexOf(srcUrlCol) < 0) pageResult.headers.push(srcUrlCol);
+              result.rows = result.rows.concat(pageResult.rows);
+              result.totalRows += pageResult.totalRows || pageResult.rows.length;
+              if (!result.headers.length && pageResult.headers.length) result.headers = pageResult.headers;
+            }
+          } catch(e) { if (e.name === 'AbortError') throw e; }
+        }
+      } else {
+        var html = await wv.executeJavaScript('document.documentElement.outerHTML');
+        if (!html) continue;
+        var apiResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ html: html, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '', fields: fields, child_delim: schema.childDelimiter || '' }),
+          signal: signal
+        });
+        result = await apiResp.json();
+        if (result && result.rows && isBase) {
+          if (!result.headers) result.headers = [];
+          if (!result.headers.some(function(h) { return /链接|^link$|url|href/i.test(h); })) {
+            var curUrl = wv.getURL();
+            var srcCol2 = '来源URL';
+            result.rows.forEach(function(r) { r[srcCol2] = curUrl || ''; });
+            if (result.headers.indexOf(srcCol2) < 0) result.headers.push(srcCol2);
+          }
+        }
+      }
+      if (result && !result.error && result.rows && result.rows.length > 0) {
+        allResults.push(result);
+      }
+    }
+    return allResults;
+  }
+
+  /** 多方案实时合并预览：勾选 ≥2 方案时触发 */
   async function _fetchChainMergeLive(checked) {
     var previewWrap = document.getElementById('schemaPreviewWrap');
     var previewInfo = document.getElementById('schemaPreviewInfo');
@@ -7709,79 +7792,7 @@ window._editorCollapseAll = function() {
     previewWrap.innerHTML = '<div class="tree-empty">实时提取中...</div>';
     _chainFetchAbort = new AbortController();
     try {
-      var wv = document.getElementById('webview');
-      // 获取页面快照（详情页数据）
-      var pageSnapshots = [];
-      try {
-        var slResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list', { signal: _chainFetchAbort.signal });
-        if (slResp.ok) {
-          var slData = await slResp.json();
-          pageSnapshots = slData.snapshots || [];
-        }
-      } catch(e) {}
-
-      var allResults = [];
-      for (var ci = 0; ci < checked.length; ci++) {
-        var cs = checked[ci];
-        var schema = cs.schema;
-        if (!schema || !schema.fields || schema.fields.length === 0) continue;
-        var fields = schema.fields.filter(function(f) { return f.isText || f.childText || (f.attr && f.attr.trim()); });
-        if (fields.length === 0) continue;
-
-        var result;
-        var isBase = (ci === 0);
-        // 方案0（列表）→ 当前 webview；方案1+（详情）→ 页面快照
-        if (!isBase && pageSnapshots.length > 0) {
-          result = { rows: [], headers: [], totalRows: 0 };
-          for (var si = 0; si < pageSnapshots.length; si++) {
-            var snap = pageSnapshots[si];
-            try {
-              var hResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/' + snap.id + '/html', { signal: _chainFetchAbort.signal });
-              if (!hResp.ok) continue;
-              var hData = await hResp.json();
-              var snapHtml = hData.html;
-              if (!snapHtml) continue;
-              var apiResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ html: snapHtml, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '', fields: fields, child_delim: schema.childDelimiter || '' }),
-                signal: _chainFetchAbort.signal
-              });
-              var pageResult = await apiResp.json();
-              if (pageResult && !pageResult.error && pageResult.rows) {
-                var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
-                pageResult.rows.forEach(function(r) { r[srcUrlCol] = snap.url || ''; });
-                if (pageResult.headers.indexOf(srcUrlCol) < 0) pageResult.headers.push(srcUrlCol);
-                result.rows = result.rows.concat(pageResult.rows);
-                result.totalRows += pageResult.totalRows || pageResult.rows.length;
-                if (!result.headers.length && pageResult.headers.length) result.headers = pageResult.headers;
-              }
-            } catch(e) {}
-          }
-        } else {
-          // 当前 webview（方案0，或无快照时的兜底）
-          var html = await wv.executeJavaScript('document.documentElement.outerHTML');
-          if (!html) continue;
-          var apiResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ html: html, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '', fields: fields, child_delim: schema.childDelimiter || '' }),
-            signal: _chainFetchAbort.signal
-          });
-          result = await apiResp.json();
-          if (result && result.rows && isBase) {
-            // 方案0 自带链接列，不覆盖
-            if (!result.headers) result.headers = [];
-            if (!result.headers.some(function(h) { return /链接|^link$|url|href/i.test(h); })) {
-              var curUrl = wv.getURL();
-              var srcCol2 = '来源URL';
-              result.rows.forEach(function(r) { r[srcCol2] = curUrl || ''; });
-              if (result.headers.indexOf(srcCol2) < 0) result.headers.push(srcCol2);
-            }
-          }
-        }
-        if (result && !result.error && result.rows && result.rows.length > 0) {
-          allResults.push(result);
-        }
-      }
+      var allResults = await _extractFromSchemas(checked, _chainFetchAbort.signal);
       _chainFetchAbort = null;
 
       if (allResults.length === 0) {
@@ -7883,36 +7894,6 @@ window._editorCollapseAll = function() {
       if (e.name === 'AbortError') return;  // 被新请求取消，不报错
       previewWrap.innerHTML = '<div class="tree-empty">加载失败: ' + e.message + '</div>';
     }
-  }
-
-  async function _renderMergedPreview(checked) {
-    var previewWrap = document.getElementById('schemaPreviewWrap');
-    var previewInfo = document.getElementById('schemaPreviewInfo');
-    if (!previewWrap) return;
-    previewWrap.innerHTML = '<div class="tree-empty">正在合并预览...</div>';
-    var allResults = [];
-    for (var ci = 0; ci < checked.length; ci++) {
-      var result = await executeExtraction(checked[ci].schema);
-      if (result && !result.error && result.rows && result.rows.length > 0) allResults.push(result);
-    }
-    if (allResults.length === 0) {
-      previewWrap.innerHTML = '<div class="tree-empty">无合并数据</div>';
-      if (previewInfo) previewInfo.textContent = '';
-      return;
-    }
-    var allHeaders = [];
-    allResults.forEach(function(r) { (r.headers || []).forEach(function(h) { if (allHeaders.indexOf(h) < 0) allHeaders.push(h); }); });
-    var mergedRows = [];
-    allResults.forEach(function(r) {
-      (r.rows || []).forEach(function(srcRow) {
-        var row = {};
-        allHeaders.forEach(function(h) { row[h] = srcRow[h] !== undefined ? srcRow[h] : ''; });
-        mergedRows.push(row);
-      });
-    });
-    Parser.state.schemaPreviewData = { rows: mergedRows, headers: allHeaders, totalRows: mergedRows.length };
-    renderModalPreviewTable(Parser.state.schemaPreviewData);
-    if (previewInfo) previewInfo.textContent = '共 ' + mergedRows.length + ' 行，' + allHeaders.length + ' 列（合并）';
   }
 
   // 下拉开关
@@ -10434,107 +10415,21 @@ window._editorCollapseAll = function() {
           }
         }
         setStatus('开始提取 ' + checked.length + ' 个方案...');
-        var allResults = [];
+        // 清除快照缓存，确保提取最新数据
+        Parser.state._snapHtmlCache = {};
+        var allResults = await _extractFromSchemas(checked);
         var wv = document.getElementById('webview');
-        // 检查是否有翻页注册时保存的页面快照
-        var pageSnapshots = [];
-        try {
-          var snapListResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list');
-          if (snapListResp.ok) {
-            var snapListData = await snapListResp.json();
-            pageSnapshots = snapListData.snapshots || [];
-          }
-        } catch (e) { console.warn('[批量提取] 获取快照列表失败:', e); }
-        if (pageSnapshots.length > 0) {
-          setStatus('批量提取 ' + pageSnapshots.length + ' 页数据...');
-        }
-        for (var ci = 0; ci < checked.length; ci++) {
-          var cs = checked[ci];
-          if (!cs.schema || !cs.schema.fields || cs.schema.fields.length === 0) {
-            continue;
-          }
-          // 链路模式走 Python 后端，手动模式走前端引擎
-          var result;
-          var isBase = (ci === 0);
-          if (cs.schema.mode === 'chain' || (cs.schema.fields && cs.schema.fields.length > 0 && cs.schema.fields[0].type === 'chain')) {
-            if (!isBase && pageSnapshots.length > 0) {
-              // 方案1+（详情）→ 页面快照
-              result = { rows: [], headers: [], totalRows: 0 };
-              for (var si = 0; si < pageSnapshots.length; si++) {
-                var snap = pageSnapshots[si];
-                try {
-                  var hResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/' + snap.id + '/html');
-                  if (!hResp.ok) continue;
-                  var hData = await hResp.json();
-                  var html = hData.html;
-                  if (!html) continue;
-                  var apiResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      html: html,
-                      chain_type: cs.schema.chainType || 'css',
-                      deepest_selector: cs.schema.deepestSelector || '',
-                      fields: cs.schema.fields,
-                      child_delim: cs.schema.childDelimiter || ''
-                    })
-                  });
-                  var pageResult = await apiResp.json();
-                  if (pageResult && !pageResult.error && pageResult.rows && pageResult.rows.length > 0) {
-                    // 每行附加来源URL，列名与 secLinkCol 用户选择的链接列一致
-                    var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
-                    pageResult.rows.forEach(function(r) { r[srcUrlCol] = snap.url || ''; });
-                    if (pageResult.headers.indexOf(srcUrlCol) < 0) pageResult.headers.push(srcUrlCol);
-                    result.rows = result.rows.concat(pageResult.rows);
-                    result.totalRows += pageResult.totalRows || pageResult.rows.length;
-                    if (!result.headers.length && pageResult.headers.length) {
-                      result.headers = pageResult.headers;
-                    }
-                  }
-                } catch (e) { console.error('[批量提取] 第' + (si+1) + '页失败:', e); }
-              }
-              console.log('[批量提取] 方案 ' + cs.name + ': ' + pageSnapshots.length + ' 页 → ' + result.rows.length + ' 行');
-            } else {
-              // 没有快照 → 从当前页实时提取（原有逻辑）
-              var html = await wv.executeJavaScript('document.documentElement.outerHTML');
-              if (!html) continue;
-              var apiResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  html: html,
-                  chain_type: cs.schema.chainType || 'css',
-                  deepest_selector: cs.schema.deepestSelector || '',
-                  fields: cs.schema.fields,
-                  child_delim: cs.schema.childDelimiter || ''
-                })
-              });
-              result = await apiResp.json();
-              if (result && result.rows && isBase) {
-                // 方案0 自带链接列就不覆盖
-                var curUrl = wv.getURL();
-                if (!result.headers) result.headers = [];
-                if (!result.headers.some(function(h) { return /链接|^link$|url|href/i.test(h); })) {
-                  var srcCol2 = '来源URL';
-                  result.rows.forEach(function(r) { r[srcCol2] = curUrl || ''; });
-                  if (result.headers.indexOf(srcCol2) < 0) result.headers.push(srcCol2);
-                }
-              }
-            }
-          } else {
-            result = await executeExtraction(cs.schema);
-          }
-          if (result && !result.error && result.rows && result.rows.length > 0) {
-            allResults.push(result);
-            // 存库
-            try {
-              await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/save', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ scheme_name: cs.name, rows: result.rows, headers: result.headers })
-              });
-            } catch (e) { console.error('存库失败:', cs.name, e); }
-          }
+        // 保存到 DB
+        for (var si = 0; si < allResults.length && si < checked.length; si++) {
+          try {
+            await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/save', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ scheme_name: checked[si].name, rows: allResults[si].rows, headers: allResults[si].headers })
+            });
+          } catch (e) { console.error('存库失败:', checked[si].name, e); }
         }
         if (allResults.length === 0) {
-          setStatus(pageSnapshots.length > 0 ? '已保存，' + pageSnapshots.length + ' 页均无匹配数据' : '已保存，当前页面无匹配数据');
+          setStatus('已保存，当前页面无匹配数据');
           var m2 = document.getElementById('schemaModal');
           if (m2) m2.classList.add('hidden');
           Parser.state.chainSchemes.forEach(function(s) { s.checked = false; });
