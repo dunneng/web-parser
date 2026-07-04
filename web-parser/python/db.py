@@ -769,10 +769,15 @@ def save_chain_data(scheme_name: str, rows: list[dict], headers: list[str]) -> d
     return {"ok": True, "scheme_name": scheme_name, "rows": len(rows)}
 
 
-def get_chain_data(scheme_names: list[str]) -> dict:
-    """查询一个或多个方案的数据，多个方案垂直合并"""
+def get_chain_data(scheme_names: list[str], link_col: str = "") -> dict:
+    """查询一个或多个方案的数据。
+    有 link_col 时：以该列为索引，横向匹配合并（详情列加前缀）
+    无 link_col 时：垂直拼接（兼容旧行为）
+    """
     all_rows = []
     all_headers = []
+    scheme_results = []  # [(name, rows, headers), ...]
+
     with get_db() as db:
         for name in scheme_names:
             row = db.execute("SELECT data_json FROM chain_data WHERE scheme_name=?", (name,)).fetchone()
@@ -781,14 +786,76 @@ def get_chain_data(scheme_names: list[str]) -> dict:
             data = json.loads(row["data_json"])
             rows = data.get("rows", [])
             headers = data.get("headers", [])
-            for h in headers:
-                if h not in all_headers:
-                    all_headers.append(h)
-            for r in rows:
-                merged = {}
-                for h in all_headers:
-                    merged[h] = r.get(h, "")
-                all_rows.append(merged)
+            scheme_results.append((name, rows, headers))
+
+    if not scheme_results:
+        return {"rows": [], "headers": [], "totalRows": 0}
+
+    import re as _re2
+
+    def _find_link_col(headers: list[str]) -> str:
+        """从 headers 中找到链接列：优先匹配 链接/link，其次 url/href"""
+        for h in headers:
+            if _re2.search(r'链接|^link$|_link$|链接地址', h, _re2.IGNORECASE):
+                return h
+        for h in headers:
+            if _re2.search(r'url|href', h, _re2.IGNORECASE):
+                return h
+        return ""
+
+    if len(scheme_results) >= 2:
+        # ── 逐级横向合并：每步从上一个方案的 headers 中自动检测链接列 ──
+        base_name, base_rows, base_headers = scheme_results[0]
+        all_headers = list(base_headers)
+        merged_rows = [{k: v for k, v in r.items()} for r in base_rows]  # 深拷贝
+
+        for bi in range(1, len(scheme_results)):
+            next_name, next_rows, next_headers = scheme_results[bi]
+            prev_headers = scheme_results[bi - 1][2]
+            # 逐级检测：从上一个方案的 headers 找链接列
+            step_link = link_col if (bi == 1 and link_col) else _find_link_col(prev_headers)
+            # 如果在下一个方案中找不到同名列，尝试用 next 方案中匹配的列
+            next_link = step_link
+            if step_link and step_link not in next_headers:
+                next_link = _find_link_col(next_headers)
+            if not step_link or not next_link:
+                # 无共同链接列 → 竖向拼接
+                for r in next_rows:
+                    row = {}
+                    for h in all_headers:
+                        row[h] = r.get(h, "")
+                    merged_rows.append(row)
+                continue
+            idx = {}
+            for nr in next_rows:
+                k = nr.get(next_link, "")
+                if k:
+                    idx[k] = nr
+            prefix = next_name
+            for h in next_headers:
+                if h != next_link:
+                    prefixed = f"【{prefix}-{h}】"
+                    if prefixed not in all_headers:
+                        all_headers.append(prefixed)
+            for br in merged_rows:
+                key = br.get(step_link, "")
+                match = idx.get(key) if key else None
+                for h in next_headers:
+                    if h != next_link:
+                        prefixed = f"【{prefix}-{h}】"
+                        br[prefixed] = match[h] if (match and h in match) else ""
+        return {"rows": merged_rows, "headers": all_headers, "totalRows": len(merged_rows)}
+
+    # ── 垂直拼接（只有一个方案）──
+    for name, rows, headers in scheme_results:
+        for h in headers:
+            if h not in all_headers:
+                all_headers.append(h)
+        for r in rows:
+            merged = {}
+            for h in all_headers:
+                merged[h] = r.get(h, "")
+            all_rows.append(merged)
     return {"rows": all_rows, "headers": all_headers, "totalRows": len(all_rows)}
 
 

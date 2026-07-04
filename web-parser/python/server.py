@@ -898,11 +898,11 @@ async def save_chain_data(req: ChainDataSaveRequest):
     return db.save_chain_data(req.scheme_name, req.rows, req.headers)
 
 @app.get("/api/chain-data/query")
-async def query_chain_data(schemes: str = ""):
+async def query_chain_data(schemes: str = "", link_col: str = ""):
     names = [n.strip() for n in schemes.split(",") if n.strip()]
     if not names:
         return {"rows": [], "headers": [], "totalRows": 0}
-    return db.get_chain_data(names)
+    return db.get_chain_data(names, link_col=link_col)
 
 @app.delete("/api/chain-data/{scheme_name}")
 async def delete_chain_data(scheme_name: str):

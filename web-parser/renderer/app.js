@@ -7660,7 +7660,7 @@ window._editorCollapseAll = function() {
       var nameInput = document.getElementById('chainSchemaName');
       if (nameInput) nameInput.value = '';
       Parser.state._editingChainSchemeIdx = null;
-      _fetchChainDataFromDB(checked);
+      _fetchChainMergeLive(checked);
     } else if (checked.length === 1) {
       if (treePanel) treePanel.style.display = '';
       if (editorPanel) editorPanel.style.display = '';
@@ -7699,6 +7699,161 @@ window._editorCollapseAll = function() {
 
   var _chainFetchAbort = null;  // 防止快速切换竞态
 
+  /** 多方案实时合并：不走 DB，直接走 live extraction（与"保存并查询"同逻辑） */
+  async function _fetchChainMergeLive(checked) {
+    var previewWrap = document.getElementById('schemaPreviewWrap');
+    var previewInfo = document.getElementById('schemaPreviewInfo');
+    if (!previewWrap) return;
+    if (_chainFetchAbort) { _chainFetchAbort.abort(); _chainFetchAbort = null; }
+    if (_chainPreviewTimer) { clearTimeout(_chainPreviewTimer); _chainPreviewTimer = null; }
+    previewWrap.innerHTML = '<div class="tree-empty">实时提取中...</div>';
+    _chainFetchAbort = new AbortController();
+    try {
+      var wv = document.getElementById('webview');
+      // 获取页面快照（详情页数据）
+      var pageSnapshots = [];
+      try {
+        var slResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list', { signal: _chainFetchAbort.signal });
+        if (slResp.ok) {
+          var slData = await slResp.json();
+          pageSnapshots = slData.snapshots || [];
+        }
+      } catch(e) {}
+
+      var allResults = [];
+      for (var ci = 0; ci < checked.length; ci++) {
+        var cs = checked[ci];
+        var schema = cs.schema;
+        if (!schema || !schema.fields || schema.fields.length === 0) continue;
+        var fields = schema.fields.filter(function(f) { return f.isText || f.childText || (f.attr && f.attr.trim()); });
+        if (fields.length === 0) continue;
+
+        var result;
+        var isBase = (ci === 0);
+        // 方案0（列表）→ 当前 webview；方案1+（详情）→ 页面快照
+        if (!isBase && pageSnapshots.length > 0) {
+          result = { rows: [], headers: [], totalRows: 0 };
+          for (var si = 0; si < pageSnapshots.length; si++) {
+            var snap = pageSnapshots[si];
+            try {
+              var hResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/' + snap.id + '/html', { signal: _chainFetchAbort.signal });
+              if (!hResp.ok) continue;
+              var hData = await hResp.json();
+              var snapHtml = hData.html;
+              if (!snapHtml) continue;
+              var apiResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ html: snapHtml, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '', fields: fields, child_delim: schema.childDelimiter || '' }),
+                signal: _chainFetchAbort.signal
+              });
+              var pageResult = await apiResp.json();
+              if (pageResult && !pageResult.error && pageResult.rows) {
+                var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
+                pageResult.rows.forEach(function(r) { r[srcUrlCol] = snap.url || ''; });
+                if (pageResult.headers.indexOf(srcUrlCol) < 0) pageResult.headers.push(srcUrlCol);
+                result.rows = result.rows.concat(pageResult.rows);
+                result.totalRows += pageResult.totalRows || pageResult.rows.length;
+                if (!result.headers.length && pageResult.headers.length) result.headers = pageResult.headers;
+              }
+            } catch(e) {}
+          }
+        } else {
+          // 当前 webview（方案0，或无快照时的兜底）
+          var html = await wv.executeJavaScript('document.documentElement.outerHTML');
+          if (!html) continue;
+          var apiResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ html: html, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '', fields: fields, child_delim: schema.childDelimiter || '' }),
+            signal: _chainFetchAbort.signal
+          });
+          result = await apiResp.json();
+          if (result && result.rows && isBase) {
+            // 方案0 自带链接列，不覆盖
+            if (!result.headers) result.headers = [];
+            if (!result.headers.some(function(h) { return /链接|^link$|url|href/i.test(h); })) {
+              var curUrl = wv.getURL();
+              var srcCol2 = '来源URL';
+              result.rows.forEach(function(r) { r[srcCol2] = curUrl || ''; });
+              if (result.headers.indexOf(srcCol2) < 0) result.headers.push(srcCol2);
+            }
+          }
+        }
+        if (result && !result.error && result.rows && result.rows.length > 0) {
+          allResults.push(result);
+        }
+      }
+      _chainFetchAbort = null;
+
+      if (allResults.length === 0) {
+        previewWrap.innerHTML = '<div class="tree-empty">无匹配数据</div>';
+        if (previewInfo) previewInfo.textContent = '';
+        return;
+      }
+
+      // 合并（与"保存并查询"同逻辑）
+      var allHeaders = [];
+      allResults.forEach(function(r) { (r.headers || []).forEach(function(h) { if (allHeaders.indexOf(h) < 0) allHeaders.push(h); }); });
+      var mergedRows = [];
+      if (allResults.length >= 2) {
+        var baseRows = allResults[0].rows || [];
+        for (var bi = 1; bi < allResults.length; bi++) {
+          var prevHeaders = allResults[bi - 1].headers || [];
+          var nextRows = allResults[bi].rows || [];
+          var nextHeaders = allResults[bi].headers || [];
+          var _findLinkCol = function(hds) {
+            for (var i = 0; i < hds.length; i++) { if (/链接|^link$|_link$|链接地址/i.test(hds[i])) return hds[i]; }
+            for (var j = 0; j < hds.length; j++) { if (/url|href/i.test(hds[j])) return hds[j]; }
+            return '';
+          };
+          var linkCol = (bi === 1 && document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '';
+          if (!linkCol) { linkCol = _findLinkCol(prevHeaders); }
+          var nextLinkCol = linkCol;
+          if (linkCol && nextHeaders.indexOf(linkCol) < 0) { nextLinkCol = _findLinkCol(nextHeaders); }
+          if (!linkCol || !nextLinkCol) {
+            for (var ri = 0; ri < nextRows.length; ri++) {
+              var row2 = {};
+              allHeaders.forEach(function(h) { row2[h] = nextRows[ri][h] !== undefined ? nextRows[ri][h] : ''; });
+              baseRows.push(row2);
+            }
+            continue;
+          }
+          var idx = {};
+          nextRows.forEach(function(nr) { var k = nr[nextLinkCol]; if (k) idx[k] = nr; });
+          var prefix = (checked[bi] && checked[bi].name) ? checked[bi].name : ('方案' + (bi + 1));
+          nextHeaders.forEach(function(h) {
+            if (h !== nextLinkCol && allHeaders.indexOf('【' + prefix + '-' + h + '】') < 0) allHeaders.push('【' + prefix + '-' + h + '】');
+          });
+          baseRows.forEach(function(br) {
+            var key = br[linkCol];
+            var match = key ? idx[key] : null;
+            nextHeaders.forEach(function(h) {
+              if (h !== nextLinkCol) br['【' + prefix + '-' + h + '】'] = match ? (match[h] || '') : '';
+            });
+          });
+        }
+        mergedRows = baseRows;
+      } else {
+        allResults.forEach(function(r) {
+          (r.rows || []).forEach(function(srcRow) {
+            var row = {};
+            allHeaders.forEach(function(h) { row[h] = srcRow[h] !== undefined ? srcRow[h] : ''; });
+            mergedRows.push(row);
+          });
+        });
+      }
+
+      var data = { rows: mergedRows, headers: allHeaders, totalRows: mergedRows.length };
+      Parser.state.schemaPreviewData = data;
+      renderModalPreviewTable(data);
+      _refreshExportLinksBtn();
+      if (previewInfo) previewInfo.textContent = '共 ' + data.totalRows + ' 行，' + allHeaders.length + ' 列' + (checked.length > 1 ? '（实时合并）' : '');
+    } catch (e) {
+      if (_chainFetchAbort && _chainFetchAbort.signal.aborted) return;
+      _chainFetchAbort = null;
+      previewWrap.innerHTML = '<div class="tree-empty">提取失败: ' + (e.message || '') + '</div>';
+    }
+  }
+
   async function _fetchChainDataFromDB(checked) {
     var previewWrap = document.getElementById('schemaPreviewWrap');
     var previewInfo = document.getElementById('schemaPreviewInfo');
@@ -7708,7 +7863,8 @@ window._editorCollapseAll = function() {
     if (_chainPreviewTimer) { clearTimeout(_chainPreviewTimer); _chainPreviewTimer = null; }
     previewWrap.innerHTML = '<div class="tree-empty">从库加载中...</div>';
     var names = checked.map(function(s) { return encodeURIComponent(s.name); }).join(',');
-    var url = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + names + '&_=' + Date.now();
+    var linkCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '';
+    var url = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + names + (linkCol ? '&link_col=' + encodeURIComponent(linkCol) : '') + '&_=' + Date.now();
     _chainFetchAbort = new AbortController();
     try {
       var resp = await fetch(url, { signal: _chainFetchAbort.signal });
@@ -7721,6 +7877,7 @@ window._editorCollapseAll = function() {
       }
       Parser.state.schemaPreviewData = data;
       renderModalPreviewTable(data);
+      _refreshExportLinksBtn();
       if (previewInfo) previewInfo.textContent = '共 ' + data.totalRows + ' 行，' + (data.headers || []).length + ' 列' + (checked.length > 1 ? '（合并）' : '');
     } catch (e) {
       if (e.name === 'AbortError') return;  // 被新请求取消，不报错
@@ -9909,55 +10066,26 @@ window._editorCollapseAll = function() {
         if (schemaPreviewWrap) schemaPreviewWrap.innerHTML = '';
         return;
       }
-      // 调 Python 后端提取（有快照则批量提取多页）
+      // 调 Python 后端提取（只用当前 webview 页面，不走快照）
       try {
         var wv = document.getElementById('webview');
         if (!wv) { resetChainCounts(); return; }
-        // 检查是否有翻页快照
-        var snapHtmls = [];
-        try {
-          var slResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list');
-          if (slResp.ok) {
-            var slData = await slResp.json();
-            var snaps = slData.snapshots || [];
-            for (var si = 0; si < snaps.length; si++) {
-              var shResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/' + snaps[si].id + '/html');
-              if (shResp.ok) {
-                var shData = await shResp.json();
-                if (shData.html) snapHtmls.push(shData.html);
-              }
-            }
-          }
-        } catch(e) {}
-        if (snapHtmls.length === 0) {
-          // 无快照 → 只取当前页
-          var html = await wv.executeJavaScript('document.documentElement.outerHTML');
-          if (!html) { resetChainCounts(); return; }
-          snapHtmls = [html];
+        var html = await wv.executeJavaScript('document.documentElement.outerHTML');
+        if (!html) { resetChainCounts(); return; }
+        var resp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            html: html,
+            chain_type: schema.chainType || 'css',
+            deepest_selector: schema.deepestSelector || '',
+            fields: schema.fields,
+            child_delim: schema.childDelimiter || ''
+          })
+        });
+        var result = await resp.json();
+        if (result && !result.error && result.rows) {
+          result.totalRows = result.rows.length;
         }
-        // 逐页提取并合并
-        var mergedRows = [];
-        var mergedHeaders = [];
-        var mergedCounts = [];
-        for (var pi = 0; pi < snapHtmls.length; pi++) {
-          var resp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              html: snapHtmls[pi],
-              chain_type: schema.chainType || 'css',
-              deepest_selector: schema.deepestSelector || '',
-              fields: schema.fields,
-              child_delim: schema.childDelimiter || ''
-            })
-          });
-          var pageResult = await resp.json();
-          if (pageResult && !pageResult.error && pageResult.rows) {
-            mergedRows = mergedRows.concat(pageResult.rows);
-            if (!mergedHeaders.length && pageResult.headers) mergedHeaders = pageResult.headers;
-            if (pageResult.counts) mergedCounts = pageResult.counts;
-          }
-        }
-        var result = { rows: mergedRows, headers: mergedHeaders, counts: mergedCounts, totalRows: mergedRows.length };
         if (!result || result.error) {
           schemaPreviewInfo.textContent = result ? result.error : '';
           resetChainCounts();
@@ -10327,9 +10455,10 @@ window._editorCollapseAll = function() {
           }
           // 链路模式走 Python 后端，手动模式走前端引擎
           var result;
+          var isBase = (ci === 0);
           if (cs.schema.mode === 'chain' || (cs.schema.fields && cs.schema.fields.length > 0 && cs.schema.fields[0].type === 'chain')) {
-            if (pageSnapshots.length > 0) {
-              // 有翻页快照 → 遍历每页 HTML 分别提取，合并为一个 result
+            if (!isBase && pageSnapshots.length > 0) {
+              // 方案1+（详情）→ 页面快照
               result = { rows: [], headers: [], totalRows: 0 };
               for (var si = 0; si < pageSnapshots.length; si++) {
                 var snap = pageSnapshots[si];
@@ -10351,6 +10480,10 @@ window._editorCollapseAll = function() {
                   });
                   var pageResult = await apiResp.json();
                   if (pageResult && !pageResult.error && pageResult.rows && pageResult.rows.length > 0) {
+                    // 每行附加来源URL，列名与 secLinkCol 用户选择的链接列一致
+                    var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
+                    pageResult.rows.forEach(function(r) { r[srcUrlCol] = snap.url || ''; });
+                    if (pageResult.headers.indexOf(srcUrlCol) < 0) pageResult.headers.push(srcUrlCol);
                     result.rows = result.rows.concat(pageResult.rows);
                     result.totalRows += pageResult.totalRows || pageResult.rows.length;
                     if (!result.headers.length && pageResult.headers.length) {
@@ -10375,6 +10508,16 @@ window._editorCollapseAll = function() {
                 })
               });
               result = await apiResp.json();
+              if (result && result.rows && isBase) {
+                // 方案0 自带链接列就不覆盖
+                var curUrl = wv.getURL();
+                if (!result.headers) result.headers = [];
+                if (!result.headers.some(function(h) { return /链接|^link$|url|href/i.test(h); })) {
+                  var srcCol2 = '来源URL';
+                  result.rows.forEach(function(r) { r[srcCol2] = curUrl || ''; });
+                  if (result.headers.indexOf(srcCol2) < 0) result.headers.push(srcCol2);
+                }
+              }
             }
           } else {
             result = await executeExtraction(cs.schema);
@@ -10404,40 +10547,52 @@ window._editorCollapseAll = function() {
           (r.headers || []).forEach(function(h) { if (allHeaders.indexOf(h) < 0) allHeaders.push(h); });
         });
         var mergedRows = [];
-        // 多方案合并：按链接列匹配合并（详情列加前缀）
+        // 多方案合并：逐级 auto-detect 链接列，横向套娃
         if (allResults.length >= 2) {
-          var linkCol = null;
-          allResults[0].headers.forEach(function(h) {
-            if (/链接|url|href/i.test(h)) {
-              var foundInAll = allResults.every(function(r) { return (r.headers || []).indexOf(h) >= 0; });
-              if (foundInAll) linkCol = h;
+          var baseRows = allResults[0].rows || [];
+          for (var bi = 1; bi < allResults.length; bi++) {
+            var prevHeaders = allResults[bi - 1].headers || [];
+            var nextRows = allResults[bi].rows || [];
+            var nextHeaders = allResults[bi].headers || [];
+            // 逐级 auto-detect linkCol：优先匹配 链接/link，其次 url/href
+            var _findLinkCol = function(hds) {
+              for (var i = 0; i < hds.length; i++) { if (/链接|^link$|_link$|链接地址/i.test(hds[i])) return hds[i]; }
+              for (var j = 0; j < hds.length; j++) { if (/url|href/i.test(hds[j])) return hds[j]; }
+              return '';
+            };
+            var linkCol = (bi === 1 && document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '';
+            if (!linkCol) { linkCol = _findLinkCol(prevHeaders); }
+            var nextLinkCol = linkCol;
+            if (linkCol && nextHeaders.indexOf(linkCol) < 0) { nextLinkCol = _findLinkCol(nextHeaders); }
+            if (!linkCol || !nextLinkCol) {
+              // 没有共同链接列 → 竖向拼接
+              for (var ri = 0; ri < nextRows.length; ri++) {
+                var row2 = {};
+                allHeaders.forEach(function(h) { row2[h] = nextRows[ri][h] !== undefined ? nextRows[ri][h] : ''; });
+                baseRows.push(row2);
+              }
+              continue;
             }
-          });
-          if (linkCol) {
-            var baseRows = allResults[0].rows || [];
-            for (var bi = 1; bi < allResults.length; bi++) {
-              var nextRows = allResults[bi].rows || [];
-              var nextHeaders = allResults[bi].headers || [];
-              var idx = {};
-              nextRows.forEach(function(nr) { if (nr[linkCol]) idx[nr[linkCol]] = nr; });
-              var prefix = (checked[bi] && checked[bi].name) ? checked[bi].name : ('方案' + (bi + 1));
+            var idx = {};
+            nextRows.forEach(function(nr) { var k = nr[nextLinkCol]; if (k) idx[k] = nr; });
+            var prefix = (checked[bi] && checked[bi].name) ? checked[bi].name : ('方案' + (bi + 1));
+            nextHeaders.forEach(function(h) {
+              if (h !== nextLinkCol && allHeaders.indexOf('【' + prefix + '-' + h + '】') < 0) {
+                allHeaders.push('【' + prefix + '-' + h + '】');
+              }
+            });
+            baseRows.forEach(function(br) {
+              var key = br[linkCol];
+              var match = key ? idx[key] : null;
               nextHeaders.forEach(function(h) {
-                if (h !== linkCol && allHeaders.indexOf('【' + prefix + '-' + h + '】') < 0) {
-                  allHeaders.push('【' + prefix + '-' + h + '】');
+                if (h !== nextLinkCol) {
+                  br['【' + prefix + '-' + h + '】'] = match ? (match[h] || '') : '';
                 }
               });
-              baseRows.forEach(function(br) {
-                var key = br[linkCol];
-                var match = key ? idx[key] : null;
-                nextHeaders.forEach(function(h) {
-                  if (h !== linkCol) {
-                    br['【' + prefix + '-' + h + '】'] = match ? (match[h] || '') : '';
-                  }
-                });
-              });
-            }
-            mergedRows = baseRows;
-          } else {
+            });
+          }
+          mergedRows = baseRows;
+          if (mergedRows.length === 0) {
             allResults.forEach(function(r) {
               (r.rows || []).forEach(function(srcRow) {
                 var row = {};
