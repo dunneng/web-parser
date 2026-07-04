@@ -23,13 +23,11 @@ window.Parser = window.Parser || {};
     if (btnReg) btnReg.addEventListener('click', registerElements);
   }
 
-  // 第一页自动存快照（仅当还没存过任何快照时）
-  async function _saveEntrySnapshotIfFirst() {
+  // 进入提取模式时清旧快照并存当前页
+  async function _resetAndSaveSnapshot() {
     try {
-      var listResp = await fetch('http://127.0.0.1:' + (window.Parser.state.pythonPort || 19527) + '/api/page-snapshots/list');
-      if (!listResp.ok) return;
-      var listData = await listResp.json();
-      if ((listData.snapshots || []).length > 0) return; // 已有快照，不存
+      // 清空旧快照
+      await fetch('http://127.0.0.1:' + (window.Parser.state.pythonPort || 19527) + '/api/page-snapshots', { method: 'DELETE' });
       var wv = document.getElementById('webview');
       if (!wv) return;
       var html = await wv.executeJavaScript('document.documentElement.outerHTML');
@@ -74,7 +72,7 @@ window.Parser = window.Parser || {};
     // 重置快照会话计数（每次进提取允许多次自动注册，但只存第一份快照）
     window.__snapshotsThisSession = 0;
     // 如果还没存过快照，保存当前页（第一页自动存）
-    _saveEntrySnapshotIfFirst().catch(function(){});
+    _resetAndSaveSnapshot().catch(function(){});
 
     // 预加载已保存规则（按当前模式过滤）
     var allSavedRules = (window.Parser && window.Parser.state && window.Parser.state.savedSelectorRules) || [];
