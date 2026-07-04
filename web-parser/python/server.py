@@ -435,6 +435,15 @@ class ElementChainRequest(BaseModel):
 async def health():
     return {"status": "ok"}
 
+# ──────── 前端日志 → 黑窗 ────────
+class LogRequest(BaseModel):
+    msg: str = ""
+
+@app.post("/api/log")
+async def frontend_log(req: LogRequest):
+    logger.info(f"[前端] {req.msg}")
+    return {"ok": True}
+
 # ──────── 解析 API ────────
 @app.post("/api/parse/all")
 async def parse_all(req: ParseRequest):

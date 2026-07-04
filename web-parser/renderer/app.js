@@ -7698,6 +7698,15 @@ window._editorCollapseAll = function() {
   }
 
   var _chainFetchAbort = null;  // 防止快速切换竞态
+  var _chainInputTimer = null;  // 链路输入框去抖（chainLoadScheme 也需要访问）
+
+  /** 发送日志到 Python 黑窗 */
+  function _log(msg) {
+    fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/log', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ msg: msg })
+    }).catch(function(){});
+  }
 
   /** 从方案列表提取数据: ci=0→webview, ci>=1→快照。返回 allResults，支持 signal 取消 */
   async function _extractFromSchemas(checked, signal) {
@@ -7740,11 +7749,10 @@ window._editorCollapseAll = function() {
             }
             var snapHtml = snapCache[snap.id];
             if (!snapHtml) continue;
-            var apiResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ html: snapHtml, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '', fields: fields, child_delim: schema.childDelimiter || '' }),
-              signal: signal
-            });
+            var fetchOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ html: snapHtml, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '', fields: fields, child_delim: schema.childDelimiter || '' }) };
+            if (signal) fetchOpts.signal = signal;
+            var apiResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', fetchOpts);
             var pageResult = await apiResp.json();
             if (pageResult && !pageResult.error && pageResult.rows) {
               var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
@@ -7759,11 +7767,10 @@ window._editorCollapseAll = function() {
       } else {
         var html = await wv.executeJavaScript('document.documentElement.outerHTML');
         if (!html) continue;
-        var apiResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ html: html, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '', fields: fields, child_delim: schema.childDelimiter || '' }),
-          signal: signal
-        });
+        var fetchOpts2 = { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ html: html, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '', fields: fields, child_delim: schema.childDelimiter || '' }) };
+        if (signal) fetchOpts2.signal = signal;
+        var apiResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', fetchOpts2);
         result = await apiResp.json();
         if (result && result.rows && isBase) {
           if (!result.headers) result.headers = [];
@@ -7941,6 +7948,8 @@ window._editorCollapseAll = function() {
     // 强制更新选择器和链路
     var schemeDeepest = (s.schema && s.schema.deepestSelector) || '';
     var schemeChainSegs = (s.schema && s.schema.chainSegments && s.schema.chainSegments.length) ? s.schema.chainSegments : null;
+    // 中断待决的 input 去抖，防止加载方案时覆盖用户刚输入的内容
+    if (_chainInputTimer) { clearTimeout(_chainInputTimer); _chainInputTimer = null; }
     // 方案有链路数据就用方案的，否则保留当前内存里的
     if (schemeChainSegs) {
       schemaChainInput.value = schemeDeepest;
@@ -7949,10 +7958,8 @@ window._editorCollapseAll = function() {
       // 保留当前链路：从最后一段还原选择器到文本框
       var lastSeg = Parser.state.chainSegments[Parser.state.chainSegments.length - 1];
       schemaChainInput.value = (lastSeg && lastSeg.selector) || '';
-    } else {
-      schemaChainInput.value = '';
-      Parser.state.chainSegments = [];
     }
+    // 注：else 分支删掉了，不再清空输入框——保留用户正在编辑的内容
     console.log('[chainLoadScheme] idx=' + idx + ' name=' + s.name + ' deepestSelector=' + ((s.schema && s.schema.deepestSelector) || '(空)') + ' fields=' + ((s.schema && s.schema.fields) ? s.schema.fields.length : 0));
     var beforeLen = 0;
     if (Parser.state.chainSegments[0] && Parser.state.chainSegments[0].extractions) beforeLen = Parser.state.chainSegments[0].extractions.length;
@@ -10306,6 +10313,7 @@ window._editorCollapseAll = function() {
     // 保存并查询 — 始终走保存配置+实时提取+存库完整流程
     if (btnSchemaSaveQuery) {
       btnSchemaSaveQuery.addEventListener('click', async function() {
+        try {
         var checked = (Parser.state.chainSchemes || []).filter(function(s) { return s.checked !== false; });
         syncFieldsFromUI();
         var schema = buildSchemaFromUI();
@@ -10417,7 +10425,13 @@ window._editorCollapseAll = function() {
         setStatus('开始提取 ' + checked.length + ' 个方案...');
         // 清除快照缓存，确保提取最新数据
         Parser.state._snapHtmlCache = {};
-        var allResults = await _extractFromSchemas(checked);
+        var allResults;
+        try {
+          allResults = await _extractFromSchemas(checked);
+        } catch (e) {
+          setStatus('提取失败: ' + (e.message || ''));
+          return;
+        }
         var wv = document.getElementById('webview');
         // 保存到 DB
         for (var si = 0; si < allResults.length && si < checked.length; si++) {
@@ -10426,7 +10440,7 @@ window._editorCollapseAll = function() {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ scheme_name: checked[si].name, rows: allResults[si].rows, headers: allResults[si].headers })
             });
-          } catch (e) { console.error('存库失败:', checked[si].name, e); }
+          } catch (e) { setStatus('存库失败: ' + checked[si].name); }
         }
         if (allResults.length === 0) {
           setStatus('已保存，当前页面无匹配数据');
@@ -10519,6 +10533,9 @@ window._editorCollapseAll = function() {
         Parser.state._editingChainSchemeIdx = null;
         saveChainSchemesToStorage();
         setStatus('已完成: ' + mergedRows.length + ' 行, ' + allHeaders.length + ' 列');
+        } catch (e) {
+          setStatus('出错: ' + (e.message || ''));
+        }
       });
     }
     // 全屏切换
@@ -10719,7 +10736,6 @@ window._editorCollapseAll = function() {
     btnParseChain.addEventListener('click', parseChain);
     btnTraceChain.addEventListener('click', traceChain);
     // 输入变化 300ms 自动解析（粘贴、修改无需按回车）
-    var _chainInputTimer = null;
     schemaChainInput.addEventListener('input', function() {
       if (_chainInputTimer) clearTimeout(_chainInputTimer);
       _chainInputTimer = setTimeout(function() {
