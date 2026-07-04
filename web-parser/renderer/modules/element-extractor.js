@@ -69,9 +69,6 @@ window.Parser = window.Parser || {};
     S.editorItems = [];
     S.pickedElements = [];
     _editorDedupMap = null;
-    // 重置快照会话计数（每次进提取允许多次自动注册，但只存第一份快照）
-    window.__snapshotsThisSession = 0;
-    // 如果还没存过快照，保存当前页（第一页自动存）
     _resetAndSaveSnapshot().catch(function(){});
 
     // 预加载已保存规则（按当前模式过滤）

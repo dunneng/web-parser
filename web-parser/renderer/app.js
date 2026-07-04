@@ -494,44 +494,6 @@ window._editorCollapseAll = function() {
     } catch (e) {}
   }
 
-  // 如果当前页没存过快照，存一份 HTML（registerElements 调用，包括提前返回时）
-  // 用时间去重 + 会话计数：每进一次提取最多存一份（自动），退出时强制存一份
-  window.__lastSnapshotTime = window.__lastSnapshotTime || 0;
-  window.__snapshotsThisSession = window.__snapshotsThisSession || 0;
-  var __SNAPSHOT_COOLDOWN = 3000;
-  async function _savePageSnapshotIfPending() {
-    var now = Date.now();
-    try {
-      if (now - window.__lastSnapshotTime < __SNAPSHOT_COOLDOWN) {
-        console.log('[快照诊断] 冷却中，跳过（距上次' + (now - window.__lastSnapshotTime) + 'ms）');
-        return;
-      }
-      if (window.__snapshotsThisSession > 0) {
-        console.log('[快照诊断] 本次已存过，跳过');
-        return;
-      }
-      window.__snapshotsThisSession++;
-      console.log('[快照诊断] 开始保存快照...');
-      var snapUrl = '';
-      try { snapUrl = document.getElementById('webview').getURL(); } catch (_) {}
-      var snapHtml = await document.getElementById('webview').executeJavaScript('document.documentElement.outerHTML');
-      console.log('[快照诊断] url=' + snapUrl + ' htmlLen=' + (snapHtml ? snapHtml.length : 'null'));
-      if (snapHtml && snapHtml.length > 100) {
-        var snapResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/save', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: snapUrl, html: snapHtml })
-        });
-        if (snapResp.ok) {
-          var snapData = await snapResp.json();
-          console.log('[快照] 已保存: ' + snapUrl + ' total=' + snapData.total_snapshots);
-          window.__lastSnapshotTime = now;
-        }
-      } else {
-        console.log('[快照诊断] HTML太短或为空，跳过保存');
-      }
-    } catch (snapErr) { console.warn('[快照] 保存失败:', snapErr.message); }
-  }
-
   async function clearRegisteredElements() {
     try {
       await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements', { method: 'DELETE' });
