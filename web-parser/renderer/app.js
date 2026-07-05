@@ -7753,7 +7753,7 @@ window._editorCollapseAll = function() {
             if (pageResult && !pageResult.error && pageResult.rows) {
               var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
               pageResult.rows.forEach(function(r) { r[srcUrlCol] = snap.url || ''; });
-              if (pageResult.headers.indexOf(srcUrlCol) < 0) pageResult.headers.push(srcUrlCol);
+              // 不推入 headers: rows 里有即可，预览/导出不显示
               result.rows = result.rows.concat(pageResult.rows);
               result.totalRows += pageResult.totalRows || pageResult.rows.length;
               if (!result.headers.length && pageResult.headers.length) result.headers = pageResult.headers;
@@ -10080,7 +10080,7 @@ window._editorCollapseAll = function() {
               if (pageResult && !pageResult.error && pageResult.rows) {
                 var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
                 pageResult.rows.forEach(function(r) { r[srcUrlCol] = snap.url || ''; });
-                if (pageResult.headers.indexOf(srcUrlCol) < 0) pageResult.headers.push(srcUrlCol);
+                // 不推入 headers
                 mergedRows = mergedRows.concat(pageResult.rows);
                 if (!mergedHeaders.length && pageResult.headers) mergedHeaders = pageResult.headers;
                 if (pageResult.counts) mergedCounts = pageResult.counts;
