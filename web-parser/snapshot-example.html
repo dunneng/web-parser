@@ -1,0 +1,336 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="edge" />
+    <meta name=“renderer” content=“webkit”>
+    <meta name="referrer" content="always">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="shortcut icon" href="https://img1.doubanio.com/favicon.ico" type="image/x-icon">
+    <link rel="search" type="application/opensearchdescription+xml" title="豆瓣搜索" href="/opensearch?source=book">
+    <title>编程 - 读书 - 豆瓣搜索</title>
+    <meta name="description" content="编程 - 读书 - 豆瓣搜索">
+    <link rel="stylesheet" href="https://img1.doubanio.com/f/vendors/fae7e145bf16b2f427ba0fe7ef3d47c04af3a6c0/css/douban.css">
+    <style>
+      #wrapper { width: 1040px; box-sizing: border-box;}
+      @media (max-width: 1024px) { #wrapper { width: 1000px } }
+    </style>
+    <script src="https://img2.doubanio.com/cuphead/search-static/legacy/lib/jquery.js"></script>
+
+    
+    
+  
+
+    <style type="text/css">
+    #root {
+      min-height: 500px;
+    }
+
+    #root > .search-title {
+      font-size: 25px;
+      font-weight: bold;
+      line-height: 1;
+      margin-bottom: 30px;
+      padding: 0;
+      color: #494949;
+    }
+  </style>
+  </head>
+  <body>
+    
+  
+  
+
+
+
+    <link href="//img3.doubanio.com/dae/accounts/resources/f8b2226/shire/bundle.css" rel="stylesheet" type="text/css">
+
+
+
+<div id="db-global-nav" class="global-nav">
+  <div class="bd">
+    
+<div class="top-nav-info">
+  <a href="https://accounts.douban.com/passport/login?source=main" class="nav-login" rel="nofollow">登录/注册</a>
+</div>
+
+
+    <div class="top-nav-doubanapp">
+  <a href="https://www.douban.com/doubanapp/app?channel=top-nav" class="lnk-doubanapp">下载豆瓣客户端</a>
+  <div id="doubanapp-tip">
+    <a href="https://www.douban.com/doubanapp/app?channel=qipao" class="tip-link">豆瓣 <span class="version">6.0</span> 全新发布</a>
+    <a href="javascript: void 0;" class="tip-close">×</a>
+  </div>
+  <div id="top-nav-appintro" class="more-items">
+    <p class="appintro-title">豆瓣</p>
+    <p class="qrcode">扫码直接下载</p>
+    <div class="download">
+      <a href="https://www.douban.com/doubanapp/redirect?channel=top-nav&direct_dl=1&download=iOS">iPhone</a>
+      <span>·</span>
+      <a href="https://www.douban.com/doubanapp/redirect?channel=top-nav&direct_dl=1&download=Android" class="download-android">Android</a>
+    </div>
+  </div>
+</div>
+
+    
+
+
+<div class="global-nav-items">
+  <ul>
+    <li class="on">
+      <a href="https://www.douban.com"  data-moreurl-dict="{&quot;from&quot;:&quot;top-nav-click-main&quot;,&quot;uid&quot;:&quot;0&quot;}">豆瓣</a>
+    </li>
+    <li class="">
+      <a href="https://book.douban.com" target="_blank" data-moreurl-dict="{&quot;from&quot;:&quot;top-nav-click-book&quot;,&quot;uid&quot;:&quot;0&quot;}">读书</a>
+    </li>
+    <li class="">
+      <a href="https://movie.douban.com" target="_blank" data-moreurl-dict="{&quot;from&quot;:&quot;top-nav-click-movie&quot;,&quot;uid&quot;:&quot;0&quot;}">电影</a>
+    </li>
+    <li class="">
+      <a href="https://music.douban.com" target="_blank" data-moreurl-dict="{&quot;from&quot;:&quot;top-nav-click-music&quot;,&quot;uid&quot;:&quot;0&quot;}">音乐</a>
+    </li>
+    <li class="">
+      <a href="https://www.douban.com/podcast/" target="_blank" data-moreurl-dict="{&quot;from&quot;:&quot;top-nav-click-podcast&quot;,&quot;uid&quot;:&quot;0&quot;}">播客</a>
+    </li>
+    <li class="">
+      <a href="https://www.douban.com/location" target="_blank" data-moreurl-dict="{&quot;from&quot;:&quot;top-nav-click-location&quot;,&quot;uid&quot;:&quot;0&quot;}">同城</a>
+    </li>
+    <li class="">
+      <a href="https://www.douban.com/group" target="_blank" data-moreurl-dict="{&quot;from&quot;:&quot;top-nav-click-group&quot;,&quot;uid&quot;:&quot;0&quot;}">小组</a>
+    </li>
+    <li class="">
+      <a href="https://read.douban.com&#47;?dcs=top-nav&amp;dcm=douban" target="_blank" data-moreurl-dict="{&quot;from&quot;:&quot;top-nav-click-read&quot;,&quot;uid&quot;:&quot;0&quot;}">阅读</a>
+    </li>
+    <li class="">
+      <a href="https://fm.douban.com&#47;?from_=shire_top_nav" target="_blank" data-moreurl-dict="{&quot;from&quot;:&quot;top-nav-click-fm&quot;,&quot;uid&quot;:&quot;0&quot;}">FM</a>
+    </li>
+    <li class="">
+      <a href="https://time.douban.com&#47;?dt_time_source=douban-web_top_nav" target="_blank" data-moreurl-dict="{&quot;from&quot;:&quot;top-nav-click-time&quot;,&quot;uid&quot;:&quot;0&quot;}">时间</a>
+    </li>
+    <li class="">
+      <a href="https://market.douban.com&#47;?utm_campaign=douban_top_nav&amp;utm_source=douban&amp;utm_medium=pc_web" target="_blank" data-moreurl-dict="{&quot;from&quot;:&quot;top-nav-click-market&quot;,&quot;uid&quot;:&quot;0&quot;}">豆品</a>
+    </li>
+  </ul>
+</div>
+
+  </div>
+</div>
+<script>
+  ;window._GLOBAL_NAV = {
+    DOUBAN_URL: "https://www.douban.com",
+    N_NEW_NOTIS: 0,
+    N_NEW_DOUMAIL: 0
+  };
+</script>
+
+
+
+    <script src="//img3.doubanio.com/dae/accounts/resources/f8b2226/shire/bundle.js" defer="defer"></script>
+
+
+
+
+  
+
+
+    <link href="//img3.doubanio.com/dae/accounts/resources/f8b2226/book/bundle.css" rel="stylesheet" type="text/css">
+
+
+
+
+<div id="db-nav-book" class="nav">
+  <div class="nav-wrap">
+  <div class="nav-primary">
+    <div class="nav-logo">
+      <a href="https:&#47;&#47;book.douban.com">豆瓣读书</a>
+    </div>
+    <div class="nav-search">
+      <form action="https:&#47;&#47;search.douban.com&#47;book/subject_search" method="get">
+        <fieldset>
+          <legend>搜索：</legend>
+          <label for="inp-query">
+          </label>
+          <div class="inp"><input id="inp-query" name="search_text" size="22" maxlength="60" placeholder="书名、作者、ISBN" value="编程"></div>
+          <div class="inp-btn"><input type="submit" value="搜索"></div>
+          <input type="hidden" name="cat" value="1001" />
+        </fieldset>
+      </form>
+    </div>
+  </div>
+  </div>
+  <div class="nav-secondary">
+    
+
+<div class="nav-items">
+  <ul>
+    <li    ><a href="https://book.douban.com/cart/"
+     >购书单</a>
+    </li>
+    <li    ><a href="https://read.douban.com/ebooks/?dcs=book-nav&dcm=douban"
+            target="_blank"
+     >电子图书</a>
+    </li>
+    <li    ><a href="https://book.douban.com/annual/2025/?fullscreen=1&dt_from=navigation"
+            target="_blank"
+     >2025年度榜单</a>
+    </li>
+    <li    ><a href="https://c9.douban.com/app/standbyme-2025/?autorotate=false&fullscreen=true&hidenav=true&monitor_screenshot=true&dt_from=web_navigation"
+            target="_blank"
+     >2025年度报告</a>
+    </li>
+  </ul>
+</div>
+
+    <a href="https://book.douban.com/annual/2025/?fullscreen=1&&dt_from=book_navigation" class="bookannual"></a>
+  </div>
+</div>
+
+<script id="suggResult" type="text/x-jquery-tmpl">
+  <li data-link="{{= url}}">
+            <a href="{{= url}}" onclick="moreurl(this, {from:'book_search_sugg', query:'{{= keyword }}', subject_id:'{{= id}}', i: '{{= index}}', type: '{{= type}}'})">
+            <img src="{{= pic}}" width="40" />
+            <div>
+                <em>{{= title}}</em>
+                {{if year}}
+                    <span>{{= year}}</span>
+                {{/if}}
+                <p>
+                {{if type == "b"}}
+                    {{= author_name}}
+                {{else type == "a" }}
+                    {{if en_name}}
+                        {{= en_name}}
+                    {{/if}}
+                {{/if}}
+                 </p>
+            </div>
+        </a>
+        </li>
+  </script>
+
+
+
+
+    <script src="//img3.doubanio.com/dae/accounts/resources/f8b2226/book/bundle.js" defer="defer"></script>
+
+
+
+
+    <div id="wrapper">
+      
+      
+  <div id="root" class="root">
+    <div class="search-title">正在搜索...</div>
+  </div>
+  <div id="browser-support"></div>
+
+      
+  <div id="footer">
+    
+<span id="icp" class="fleft gray-link">
+    &copy; 2005－2026 douban.com, all rights reserved 北京豆网科技有限公司
+</span>
+
+<a href="https://www.douban.com/hnypt/variformcyst.py" style="display: none;"></a>
+
+<span class="fright">
+    <a href="https://www.douban.com/about">关于豆瓣</a>
+    · <a href="https://www.douban.com/jobs">在豆瓣工作</a>
+    · <a href="https://www.douban.com/about?topic=contactus">联系我们</a>
+    · <a href="https://www.douban.com/about/legal">法律声明</a>
+    · <a href="https://help.douban.com/" target="_blank">帮助中心</a>
+    · <a href="https://www.douban.com/doubanapp/">移动应用</a>
+</span>
+
+  </div>
+
+    </div>
+    <script src="https://img1.doubanio.com/f/vendors/e258329ca4b2122b4efe53fddc418967441e0e7f/js/douban.js" charset="utf-8"></script>
+    
+  <script src="https://img9.doubanio.com/cuphead/search-static/main_subject_search/vendor.0b1c5.js" charset="utf-8"></script>
+  <script type="text/javascript">
+    window.__DATA__ = {"count": 15, "error_info": "", "items": [{"abstract": "\u4eba\u6c11\u90ae\u7535\u51fa\u7248\u793e / \u51712\u518c / 2015\u5e74\u51fa\u7248", "id": 27026, "labels": [], "title": "[\u4e1b\u4e66] \u7f16\u7a0b\u4eba\u751f", "tpl_name": "search_simple", "url": "https://book.douban.com/series/27026"}, {"tpl_name": "search_more", "urls": [{"text": "\u641c\u7d22\u66f4\u591a\u53eb \u201c\u7f16\u7a0b\u201d \u7684\u4e1b\u4e66", "url": "https://book.douban.com/series/search?q=\u7f16\u7a0b"}]}, {"abstract": "\u59dc\u4f1f\u751f / \u6e05\u534e\u5927\u5b66\u51fa\u7248\u793e / 2024-5-1 / 268\u5143", "abstract_2": "", "cover_url": "https://img3.doubanio.com/view/subject/m/public/s34840603.jpg", "extra_actions": [], "id": 36860643, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'36860643',query:'%E7%BC%96%E7%A8%8B',i:'0',cat_id:'1001'})\"", "rating": {"count": 99, "rating_info": "", "star_count": 4.5, "value": 9.1}, "title": "\u7f16\u7a0b\u4e0d\u96be : \u5168\u5f69\u56fe\u89e3 + \u5fae\u8bfe + Python \u7f16\u7a0b", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/36860643/"}, {"abstract": "Colin Moock / \u6797\u5413\u6d2a / \u673a\u68b0\u5de5\u4e1a\u51fa\u7248\u793e / 2008-5 / 99.00\u5143", "abstract_2": "", "cover_url": "https://img9.doubanio.com/view/subject/m/public/s3128124.jpg", "extra_actions": [], "id": 3102069, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'3102069',query:'%E7%BC%96%E7%A8%8B',i:'1',cat_id:'1001'})\"", "rating": {"count": 77, "rating_info": "", "star_count": 4.0, "value": 8.1}, "title": "ActionScript 3.0\u7f16\u7a0b\u7cbe\u9ad3 : ActionScript 3.0 \u7f16\u7a0b\u7cbe\u9ad3", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/3102069/"}, {"abstract": "[\u7f8e] Jon Bentley / \u9ec4\u5029 / \u94b1\u4e3d\u8273 / \u5218\u7530(\u5ba1\u6821) / \u4eba\u6c11\u90ae\u7535\u51fa\u7248\u793e / 2008-10 / 39.00\u5143", "abstract_2": "", "cover_url": "https://img2.doubanio.com/view/subject/m/public/s4687321.jpg", "extra_actions": [], "id": 3227098, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'3227098',query:'%E7%BC%96%E7%A8%8B',i:'2',cat_id:'1001'})\"", "rating": {"count": 2219, "rating_info": "", "star_count": 4.5, "value": 9.1}, "title": "\u7f16\u7a0b\u73e0\u7391", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/3227098/"}, {"abstract": "[\u7f8e] John V. Guttag / \u6881\u6770 / \u4eba\u6c11\u90ae\u7535\u51fa\u7248\u793e / 2015-4 / 59.00\u5143", "abstract_2": "", "cover_url": "https://img1.doubanio.com/view/subject/m/public/s28050499.jpg", "extra_actions": [], "id": 26368668, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'26368668',query:'%E7%BC%96%E7%A8%8B',i:'3',cat_id:'1001'})\"", "rating": {"count": 55, "rating_info": "", "star_count": 4.0, "value": 7.9}, "title": "\u7f16\u7a0b\u5bfc\u8bba", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/26368668/"}, {"abstract": "\u8fc8\u514b\u5c14 (Randal K.Michael) / \u8a79\u6587\u519b / \u7b2c1\u7248 (2005\u5e741\u67081\u65e5) / 2005\u5e741\u67081\u65e5 / 52.00\u5143", "abstract_2": "", "cover_url": "https://img2.doubanio.com/view/subject/m/public/s1940031.jpg", "extra_actions": [], "id": 1225638, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'1225638',query:'%E7%BC%96%E7%A8%8B',i:'4',cat_id:'1001'})\"", "rating": {"count": 0, "rating_info": "\u8bc4\u4ef7\u4eba\u6570\u4e0d\u8db3", "star_count": 0, "value": 0}, "title": "\u7cbe\u901aUNIX Shell\u811a\u672c\u7f16\u7a0b", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/1225638/"}, {"abstract": "Eric S. Raymond / \u59dc\u5b8f / \u4f55\u6e90 / \u8521\u6653\u4fca / \u7535\u5b50\u5de5\u4e1a\u51fa\u7248\u793e / 2006-2 / 59.00\u5143", "abstract_2": "", "cover_url": "https://img1.doubanio.com/view/subject/m/public/s1631790.jpg", "extra_actions": [], "id": 1467587, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'1467587',query:'%E7%BC%96%E7%A8%8B',i:'5',cat_id:'1001'})\"", "rating": {"count": 2301, "rating_info": "", "star_count": 4.5, "value": 9.0}, "title": "UNIX\u7f16\u7a0b\u827a\u672f", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/1467587/"}, {"abstract": "[\u7f8e] Peter Van Der Linden / \u5f90\u6ce2 / \u4eba\u6c11\u90ae\u7535\u51fa\u7248\u793e / 2008-2 / 45.00\u5143", "abstract_2": "", "cover_url": "https://img9.doubanio.com/view/subject/m/public/s5886086.jpg", "extra_actions": [], "id": 2377310, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'2377310',query:'%E7%BC%96%E7%A8%8B',i:'6',cat_id:'1001'})\"", "rating": {"count": 2154, "rating_info": "", "star_count": 4.5, "value": 9.2}, "title": "C\u4e13\u5bb6\u7f16\u7a0b", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/2377310/"}, {"abstract": "[\u7f8e] Bruce Eckel / \u9648\u660a\u9e4f / \u673a\u68b0\u5de5\u4e1a\u51fa\u7248\u793e / 2007-6 / 108.00\u5143", "abstract_2": "", "cover_url": "https://img9.doubanio.com/view/subject/m/public/s27243455.jpg", "extra_actions": [], "id": 2130190, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'2130190',query:'%E7%BC%96%E7%A8%8B',i:'7',cat_id:'1001'})\"", "rating": {"count": 4278, "rating_info": "", "star_count": 4.5, "value": 9.1}, "title": "Java\u7f16\u7a0b\u601d\u60f3 \uff08\u7b2c4\u7248\uff09", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/2130190/"}, {"abstract": "[\u82f1] \u5854\u91cc\u514b\u00b7\u62c9\u5e0c\u5fb7\uff08Tariq Rashid\uff09 / \u6797\u8d50 / \u4eba\u6c11\u90ae\u7535\u51fa\u7248\u793e / 2018-4 / 69.00\u5143", "abstract_2": "", "cover_url": "https://img3.doubanio.com/view/subject/m/public/s34637002.jpg", "extra_actions": [], "id": 30192800, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'30192800',query:'%E7%BC%96%E7%A8%8B',i:'8',cat_id:'1001'})\"", "rating": {"count": 950, "rating_info": "", "star_count": 4.5, "value": 9.2}, "title": "Python\u795e\u7ecf\u7f51\u7edc\u7f16\u7a0b", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/30192800/"}, {"abstract": "\u9c8d\u91cc\u65af\u5207\u5c14\u5c3c / \u5b89\u9053 / \u4e2d\u56fd\u7535\u529b\u51fa\u7248\u793e / 2020-6 / 88\u5143", "abstract_2": "", "cover_url": "https://img1.doubanio.com/view/subject/m/public/s33761140.jpg", "extra_actions": [], "id": 35134660, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'35134660',query:'%E7%BC%96%E7%A8%8B',i:'9',cat_id:'1001'})\"", "rating": {"count": 101, "rating_info": "", "star_count": 4.0, "value": 8.3}, "title": "TypeScript\u7f16\u7a0b", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/35134660/"}, {"abstract": "[\u7f8e] Toby Segaran / \u83ab\u6620 / \u738b\u5f00\u798f / \u7535\u5b50\u5de5\u4e1a\u51fa\u7248\u793e / 2009-1 / 59.80\u5143", "abstract_2": "", "cover_url": "https://img2.doubanio.com/view/subject/m/public/s3350961.jpg", "extra_actions": [], "id": 3288908, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'3288908',query:'%E7%BC%96%E7%A8%8B',i:'10',cat_id:'1001'})\"", "rating": {"count": 1578, "rating_info": "", "star_count": 4.5, "value": 8.9}, "title": "\u96c6\u4f53\u667a\u6167\u7f16\u7a0b", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/3288908/"}, {"abstract": "[\u7f8e] \u57c3\u91cc\u514b\u00b7\u9a6c\u745f\u65af / \u8881\u56fd\u5fe0 / \u4eba\u6c11\u90ae\u7535\u51fa\u7248\u793e / 2016-7-1 / 89.00\u5143", "abstract_2": "", "cover_url": "https://img9.doubanio.com/view/subject/m/public/s28891775.jpg", "extra_actions": [], "id": 26829016, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'26829016',query:'%E7%BC%96%E7%A8%8B',i:'11',cat_id:'1001'})\"", "rating": {"count": 3990, "rating_info": "", "star_count": 4.5, "value": 9.1}, "title": "Python\u7f16\u7a0b : \u4ece\u5165\u95e8\u5230\u5b9e\u8df5", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/26829016/"}, {"abstract": "\u7c73\u52d2 / \u8d3a\u65b0\u5f81 / \u6e05\u534e\u5927\u5b66\u51fa\u7248\u793e / 2012-9 / 59.00\u5143", "abstract_2": "", "cover_url": "https://img3.doubanio.com/view/subject/m/public/s24407847.jpg", "extra_actions": [], "id": 19937608, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'19937608',query:'%E7%BC%96%E7%A8%8B',i:'12',cat_id:'1001'})\"", "rating": {"count": 0, "rating_info": "\u8bc4\u4ef7\u4eba\u6570\u4e0d\u8db3", "star_count": 0, "value": 0}, "title": "Windows 7\u9ad8\u7ea7\u7f16\u7a0b", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/19937608/"}, {"abstract": "Michael Kerrisk / \u5b59\u5251 / \u5b59\u5251 \u8bb8\u4ece\u5e74 \u8463\u5065 / \u5b59\u4f59\u5f3a \u90ed\u5149\u4f1f \u9648\u8238 / \u4eba\u6c11\u90ae\u7535\u51fa\u7248\u793e / 2014-1 / 158", "abstract_2": "", "cover_url": "https://img9.doubanio.com/view/subject/m/public/s27199116.jpg", "extra_actions": [], "id": 25809330, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'25809330',query:'%E7%BC%96%E7%A8%8B',i:'13',cat_id:'1001'})\"", "rating": {"count": 493, "rating_info": "", "star_count": 4.5, "value": 9.4}, "title": "Linux/UNIX\u7cfb\u7edf\u7f16\u7a0b\u624b\u518c", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/25809330/"}, {"abstract": "[\u65b0\u52a0\u5761] Sau Sheong Chang / \u9ec4\u5065\u5b8f / \u4eba\u6c11\u90ae\u7535\u51fa\u7248\u793e / 2017-11-22 / 79.00\u5143", "abstract_2": "", "cover_url": "https://img9.doubanio.com/view/subject/m/public/s29615255.jpg", "extra_actions": [], "id": 27204133, "interest": null, "label_actions": [], "labels": [], "more_url": "onclick=\"moreurl(this,{from:'book_subject_search',subject_id:'27204133',query:'%E7%BC%96%E7%A8%8B',i:'14',cat_id:'1001'})\"", "rating": {"count": 151, "rating_info": "", "star_count": 4.0, "value": 7.9}, "title": "Go Web \u7f16\u7a0b", "topics": [], "tpl_name": "search_subject", "url": "https://book.douban.com/subject/27204133/"}], "report": {"qtype": "195", "tags": "\u8bfb\u4e66"}, "start": 0, "text": "\u7f16\u7a0b", "total": 3000};
+      window.__USER__ = { }
+  </script>
+  
+  <script src="https://img2.doubanio.com/cuphead/search-static/main_subject_search/main.bf1a1.js" charset="utf-8"></script>
+  <script src="https://img1.doubanio.com/f/vendors/dae291ee0db6a4e4f43626fd91a554962c199246/js/core/new_rating.js" charset="utf-8"></script>
+  <script src="https://img2.doubanio.com/cuphead/search-static/legacy/js/init_collect_btn.4c151.js" charset="utf-8"></script>
+  
+<link rel="stylesheet" href="https://img9.doubanio.com/dae/cdnlib/libs/browser-support/1.0.0/browser-support.css ">
+<script src="https://img9.doubanio.com/dae/cdnlib/libs/browser-support/1.0.0/browser-support.js?v=1" charset="utf-8"></script>
+
+  
+
+
+    
+  
+
+
+
+
+    
+<script type="text/javascript">
+    (function (global) {
+        var newNode = global.document.createElement('script'),
+            existingNode = global.document.getElementsByTagName('script')[0],
+            adSource = '//erebor.douban.com/',
+            userId = '',
+            browserId = 'JNkeJLzcOG8',
+            criteria = '8:编程|3:/book/subject_search?search_text=%E7%BC%96%E7%A8%8B&amp;cat=1001',
+            preview = '',
+            debug = false,
+            adSlots = ['dale_book_subject_search_top_right'];
+
+        global.DoubanAdRequest = {src: adSource, uid: userId, bid: browserId, crtr: criteria, prv: preview, debug: debug};
+        global.DoubanAdSlots = (global.DoubanAdSlots || []).concat(adSlots);
+
+        newNode.setAttribute('type', 'text/javascript');
+        newNode.setAttribute('src', '//img1.doubanio.com/bm84dzFxMC9mL2FkanMvZGE1ZGUxOGIwNDYyNDk2NDIyOGMyNmFlMDBmMjM3MjMzZTFiMjgwYS9hZC5yZWxlYXNlLmpz?company_token=kX69T8w1wyOE-dale');
+        newNode.setAttribute('async', true);
+        existingNode.parentNode.insertBefore(newNode, existingNode);
+    })(this);
+</script>
+
+
+
+
+
+
+
+
+    <script type="text/javascript">
+    (function() {
+      DetectBrowser({
+        domId: 'browser-support',
+        callback: function(ok) {
+          if (!ok) {
+            var $root = document.getElementById('root')
+            $root && $root.parentElement.removeChild($root)
+          }
+        }
+      })
+    }())
+  </script>
+  </body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
