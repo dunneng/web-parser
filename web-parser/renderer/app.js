@@ -7614,6 +7614,12 @@ window._editorCollapseAll = function() {
     var traceResult = document.getElementById('chainTraceResult');
 
     if (checked.length >= 2) {
+      // 保存当前编辑器修改到方案，再进入合并视图
+      var prevIdx2 = Parser.state._editingChainSchemeIdx;
+      if (prevIdx2 != null && prevIdx2 >= 0 && prevIdx2 < schemes.length && Parser.state.chainSegments && Parser.state.chainSegments.length) {
+        var syncSchema2 = buildChainSchema();
+        schemes[prevIdx2].schema = syncSchema2;
+      }
       if (treePanel) treePanel.style.display = 'none';
       if (editorPanel) editorPanel.style.display = 'none';
       if (divider) divider.style.display = 'none';
@@ -7629,6 +7635,12 @@ window._editorCollapseAll = function() {
       if (editorPanel) editorPanel.style.display = '';
       if (divider) divider.style.display = '';
       if (configRow) configRow.style.display = '';
+      // 加载前先把当前编辑器的修改同步回来源方案
+      var prevIdx = Parser.state._editingChainSchemeIdx;
+      if (prevIdx != null && prevIdx >= 0 && prevIdx < schemes.length && Parser.state.chainSegments && Parser.state.chainSegments.length) {
+        var syncSchema = buildChainSchema();
+        schemes[prevIdx].schema = syncSchema;
+      }
       chainLoadScheme(schemes.indexOf(checked[0]));
       // 方案有链路数据才从库查（否则等实时提取）
       var scheme = checked[0].schema;
