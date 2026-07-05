@@ -10461,6 +10461,16 @@ window._editorCollapseAll = function() {
           return;
         }
         var wv = document.getElementById('webview');
+        // 防御：从 rows 中补全 headers（防止字段名丢失导致表头不完整）
+        for (var ai = 0; ai < allResults.length; ai++) {
+          var ar = allResults[ai];
+          if (ar.rows && ar.rows.length > 0) {
+            var rowKeys = Object.keys(ar.rows[0]);
+            for (var ki = 0; ki < rowKeys.length; ki++) {
+              if (ar.headers.indexOf(rowKeys[ki]) < 0) ar.headers.push(rowKeys[ki]);
+            }
+          }
+        }
         // 保存到 DB（只保存新提取的）
         for (var si = 0; si < allResults.length && si < toExtract.length; si++) {
           try {
