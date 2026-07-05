@@ -7506,6 +7506,18 @@ window._editorCollapseAll = function() {
         }
       });
     }
+    // 链接列下拉切换 → 重触发合并预览
+    var linkSel2 = document.getElementById('secLinkCol');
+    if (linkSel2 && !linkSel2._boundChange) {
+      linkSel2._boundChange = true;
+      linkSel2.addEventListener('change', function() {
+        var schemes = Parser.state.chainSchemes || [];
+        var checked = schemes.filter(function(s) { return s.checked !== false; });
+        if (checked.length >= 2) {
+          _fetchChainDataFromDB(checked);
+        }
+      });
+    }
     btn.addEventListener('click', function() {
       var linkCol = document.getElementById('secLinkCol').value;
       if (!linkCol) { setStatus('请选择链接列'); return; }
