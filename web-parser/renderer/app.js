@@ -10440,27 +10440,37 @@ window._editorCollapseAll = function() {
             checked = [{ name: name, schema: schema }];
           }
         }
-        setStatus('开始提取 ' + checked.length + ' 个方案...');
+        // 检查哪些方案在 DB 中已有数据（不再重复提取，保留原有数据）
+        var existingNames = [];
+        try {
+          var listResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/list');
+          var listData = await listResp.json();
+          existingNames = (listData.schemes || []).map(function(s) { return typeof s === 'string' ? s : s.scheme_name; });
+        } catch(e) {}
+        // 分离：已在 DB 中的跳过提取，只提取新方案
+        var toExtract = checked.filter(function(s) { return existingNames.indexOf(s.name) < 0; });
+        var toKeep   = checked.filter(function(s) { return existingNames.indexOf(s.name) >= 0; });
+        setStatus('开始提取 ' + toExtract.length + ' 个方案' + (toKeep.length > 0 ? '（' + toKeep.length + ' 个已有数据跳过）' : '') + '...');
         // 清除快照缓存，确保提取最新数据
         Parser.state._snapHtmlCache = {};
         var allResults;
         try {
-          allResults = await _extractFromSchemas(checked);
+          allResults = toExtract.length > 0 ? await _extractFromSchemas(toExtract) : [];
         } catch (e) {
           setStatus('提取失败: ' + (e.message || ''));
           return;
         }
         var wv = document.getElementById('webview');
-        // 保存到 DB
-        for (var si = 0; si < allResults.length && si < checked.length; si++) {
+        // 保存到 DB（只保存新提取的）
+        for (var si = 0; si < allResults.length && si < toExtract.length; si++) {
           try {
             await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/save', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ scheme_name: checked[si].name, rows: allResults[si].rows, headers: allResults[si].headers })
+              body: JSON.stringify({ scheme_name: toExtract[si].name, rows: allResults[si].rows, headers: allResults[si].headers })
             });
-          } catch (e) { setStatus('存库失败: ' + checked[si].name); }
+          } catch (e) { setStatus('存库失败: ' + toExtract[si].name); }
         }
-        if (allResults.length === 0) {
+        if (allResults.length === 0 && toKeep.length === 0) {
           setStatus('已保存，当前页面无匹配数据');
           var m2 = document.getElementById('schemaModal');
           if (m2) m2.classList.add('hidden');
