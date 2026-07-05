@@ -813,7 +813,7 @@ def get_chain_data(scheme_names: list[str], link_col: str = "") -> dict:
             next_name, next_rows, next_headers = scheme_results[bi]
             prev_headers = scheme_results[bi - 1][2]
             # 逐级检测：优先用 footer 下拉选的 link_col，否则自动检测
-            step_link = link_col if (bi == 1 and link_col) else _find_link_col(prev_headers)
+            step_link = link_col if (bi == 1 and link_col and link_col in prev_headers) else _find_link_col(prev_headers)
             # 如果 link_col 在下一个方案中存在就直接用，否则在该方案 headers 中自动检测
             next_link = link_col if (link_col and link_col in next_headers) else _find_link_col(next_headers)
             if not step_link or not next_link:
