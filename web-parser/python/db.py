@@ -769,10 +769,10 @@ def save_chain_data(scheme_name: str, rows: list[dict], headers: list[str]) -> d
     return {"ok": True, "scheme_name": scheme_name, "rows": len(rows)}
 
 
-def get_chain_data(scheme_names: list[str], link_col: str = "") -> dict:
+def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[str] = None) -> dict:
     """查询一个或多个方案的数据。
-    有 link_col 时：以该列为索引，横向匹配合并（详情列加前缀）
-    无 link_col 时：垂直拼接（兼容旧行为）
+    有 link_col/link_cols 时：以该列为索引，横向匹配合并（详情列加前缀）
+    link_cols: 每个方案使用的链接列名，按方案顺序；空字符串=自动检测
     """
     all_rows = []
     all_headers = []
@@ -812,10 +812,12 @@ def get_chain_data(scheme_names: list[str], link_col: str = "") -> dict:
         for bi in range(1, len(scheme_results)):
             next_name, next_rows, next_headers = scheme_results[bi]
             prev_headers = scheme_results[bi - 1][2]
-            # 逐级检测：优先用 footer 下拉选的 link_col，否则自动检测
-            step_link = link_col if (bi == 1 and link_col) else _find_link_col(prev_headers)
-            # link_col 非空直接用作 next 方案的合并键；否则优先用"来源URL"（快照URL与上一方案的链接一致）
-            next_link = link_col if (link_col and link_col in next_headers) else ('来源URL' if '来源URL' in next_headers else _find_link_col(next_headers))
+            # 逐级检测：优先用 per-scheme link_cols，兜底用全局 link_col，再自动检测
+            step_col = (link_cols[bi-1] if link_cols and bi-1 < len(link_cols) and link_cols[bi-1] else (link_col if bi == 1 else ''))
+            step_link = step_col if step_col else _find_link_col(prev_headers)
+            # next 方案：优先用自己指定的 link_cols[i]，兜底来源URL，再自动检测
+            next_col = (link_cols[bi] if link_cols and bi < len(link_cols) and link_cols[bi] else (link_col if link_col in next_headers else ''))
+            next_link = next_col if next_col else ('来源URL' if '来源URL' in next_headers else _find_link_col(next_headers))
             if not step_link or not next_link:
                 # 无共同链接列 → 竖向拼接
                 for r in next_rows:
