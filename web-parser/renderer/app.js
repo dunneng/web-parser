@@ -6765,22 +6765,8 @@ window._editorCollapseAll = function() {
     if (!schemaPreviewWrap) return;
     var rows = result.rows || [];
     var headers = result.headers || [];
-    // 合并模式切换（仅多方案时显示）
-    var checked = (Parser.state.chainSchemes || []).filter(function(s) { return s.checked !== false; });
-    var modeBar = '';
-    if (checked.length >= 2) {
-      var isH = Parser.state._chainMergeMode !== 'vertical';
-      modeBar = '<div class="merge-mode-bar" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px">' +
-        '<span class="merge-mode-label" style="color:var(--text-dim)">合并方式</span>' +
-        '<label class="toggle-switch" style="margin:0" title="横向合并：按链接列匹配合并列；纵向合并：追加行堆叠">' +
-          '<input type="checkbox" id="chainMergeModeToggle"' + (isH ? '' : ' checked') + ' onchange="window._toggleChainMergeMode(this.checked)">' +
-          '<span class="toggle-slider"></span>' +
-        '</label>' +
-        '<span id="mergeModeText" style="color:var(--accent);font-weight:600">' + (isH ? '横向' : '纵向') + '</span>' +
-      '</div>';
-    }
     var limit = showAll ? rows.length : Math.min(rows.length, 5);
-    var html = modeBar + '<table class="schema-preview-table"><thead><tr><th style="width:30px">#</th>';
+    var html = '<table class="schema-preview-table"><thead><tr><th style="width:30px">#</th>';
     headers.forEach(function(h, hi) {
       html += '<th draggable="true" data-col-idx="' + hi + '" class="draggable-col"><span class="col-grip">⠿</span> ' + escapeHtml(h) + '</th>';
     });
@@ -6892,9 +6878,24 @@ window._editorCollapseAll = function() {
   /** 切换多方案合并模式：横向/纵向 */
   window._toggleChainMergeMode = function(vertical) {
     Parser.state._chainMergeMode = vertical ? 'vertical' : 'horizontal';
+    _renderMergeModeToggle();
     var checked = (Parser.state.chainSchemes || []).filter(function(s) { return s.checked !== false; });
     if (checked.length >= 2) _fetchChainDataFromDB(checked);
   };
+  /** 在预览标题栏渲染合并模式 toggle */
+  function _renderMergeModeToggle() {
+    var el = document.getElementById('mergeModeToggle');
+    if (!el) return;
+    var checked = (Parser.state.chainSchemes || []).filter(function(s) { return s.checked !== false; });
+    if (checked.length < 2) { el.innerHTML = ''; return; }
+    var isH = Parser.state._chainMergeMode !== 'vertical';
+    el.innerHTML = '<span style="color:var(--text-dim);font-size:11px;margin:0 4px 0 12px">合并</span>' +
+      '<label class="toggle-switch" style="margin:0;vertical-align:middle" title="横向：按链接列匹配合并列；纵向：追加行堆叠">' +
+        '<input type="checkbox" id="chainMergeModeToggle"' + (isH ? '' : ' checked') + ' onchange="window._toggleChainMergeMode(this.checked)">' +
+        '<span class="toggle-slider"></span>' +
+      '</label>' +
+      '<span style="color:var(--accent);font-weight:600;font-size:11px;margin-left:4px">' + (isH ? '横向' : '纵向') + '</span>';
+  }
   /** 根据预览表头顺序同步重排 schema fields */
   function _syncFieldOrderFromHeaders(headers) {
     if (Parser.state.schemaMode === 'chain') {
