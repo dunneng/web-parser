@@ -8161,7 +8161,8 @@ window._editorCollapseAll = function() {
           return s;
         } else {
           var s = info.t;
-          if (info.c) s += '.' + info.c;
+          // 过滤 CSS-in-JS 随机类名：_开头(CSS Modules hash)、sc-开头(styled-components)
+          if (info.c && !/^_|^sc-/.test(info.c)) s += '.' + info.c;
           if (info.i) s += '#' + info.i;
           return s;
         }
