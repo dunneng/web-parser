@@ -10672,6 +10672,7 @@ window._editorCollapseAll = function() {
           }
         } else {
           var linkCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '';
+          _debugLog('[保存并查询] footer下拉 secLinkCol = ' + linkCol + ' schemes = ' + checked.map(function(s){return s.name}).join(','));
           var names = checked.map(function(s) { return encodeURIComponent(s.name); }).join(',');
           var qUrl = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + names + (linkCol ? '&link_col=' + encodeURIComponent(linkCol) : '');
           var dbResp = await fetch(qUrl);
