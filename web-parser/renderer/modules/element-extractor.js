@@ -1319,13 +1319,29 @@ window.Parser = window.Parser || {};
         'var _hlCount=0;function highlightEl(el,isTemplate){var ov=document.createElement("div");ov.className="__parser_auto_overlay";ov.setAttribute("data-parser-box","1");var tag=el.tagName.toUpperCase();var isVoid=tag==="IMG"||tag==="INPUT"||tag==="BR"||tag==="HR"||tag==="SOURCE"||tag==="EMBED"||tag==="AREA";var re=el.getBoundingClientRect();if(re.width===0&&re.height===0)return;' +
         'var borderColor=isTemplate?"#f59e0b":"#a78bfa";var bgColor=isTemplate?"rgba(245,158,11,0.22)":"rgba(167,139,250,0.18)";' +
         'if(isVoid){' +
-          // void 元素：浮层插入父节点，用 absolute 相对定位，不随滚动/鼠标偏移
-          'var parent=el.parentElement;if(!parent){_hlCount++;return;}' +
-          'var oldPPos=parent.style.position;ov.setAttribute("data-ppos",oldPPos||"");' +
-          'if(!oldPPos||oldPPos==="static")parent.style.position="relative";' +
-          'var pr=parent.getBoundingClientRect();' +
-          'ov.style.cssText="position:absolute;pointer-events:none;z-index:2147483640;left:"+(re.left-pr.left)+"px;top:"+(re.top-pr.top)+"px;width:"+re.width+"px;height:"+re.height+"px;border:4px solid "+borderColor+";border-radius:4px;box-sizing:border-box;background:"+bgColor+";box-shadow:0 0 12px rgba(167,139,250,0.3),0 0 24px rgba(167,139,250,0.15);animation:__parser_hl_pulse 1s ease-in-out";' +
-          'parent.appendChild(ov);' +
+          // void 元素：fixed 定位挂 body + scroll 跟随，和 drawBox 一致
+          'ov.style.cssText="position:fixed;pointer-events:none;z-index:2147483640;left:"+re.left+"px;top:"+re.top+"px;width:"+re.width+"px;height:"+re.height+"px;border:4px solid "+borderColor+";border-radius:4px;box-sizing:border-box;background:"+bgColor+";box-shadow:0 0 12px rgba(167,139,250,0.3),0 0 24px rgba(167,139,250,0.15);animation:__parser_hl_pulse 1s ease-in-out";' +
+          'ov.__parserImgEl=el;' +
+          'document.body.appendChild(ov);' +
+          'if(!window.__parserImgOverlays)window.__parserImgOverlays=[];' +
+          'window.__parserImgOverlays.push(ov);' +
+          'if(!window.__parserScrollBound){' +
+            'window.__parserScrollBound=true;' +
+            'var _hlTick=false;' +
+            'window.addEventListener("scroll",function(){' +
+              'if(_hlTick)return;_hlTick=true;' +
+              'requestAnimationFrame(function(){' +
+                '_hlTick=false;' +
+                'var ovs=window.__parserImgOverlays;if(!ovs)return;' +
+                'for(var oi=0;oi<ovs.length;oi++){' +
+                  'var o=ovs[oi];if(!o||!o.__parserImgEl)continue;' +
+                  'var nr=o.__parserImgEl.getBoundingClientRect();' +
+                  'o.style.left=nr.left+"px";o.style.top=nr.top+"px";' +
+                  'o.style.width=nr.width+"px";o.style.height=nr.height+"px";' +
+                '}' +
+              '});' +
+            '},{passive:true});' +
+          '}' +
           'el.__parserBox=ov;' +
         '}else{var oldPos=el.style.position;ov.setAttribute("data-ppos",oldPos||"");if(!oldPos||oldPos==="static")el.style.position="relative";ov.style.cssText="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483640;border:4px solid "+borderColor+";border-radius:4px;box-sizing:border-box;background:"+bgColor+";box-shadow:0 0 12px rgba(167,139,250,0.3),0 0 24px rgba(167,139,250,0.15);animation:__parser_hl_pulse 1s ease-in-out";el.appendChild(ov);el.__parserBox=ov}_hlCount++;}' +
         // extractInfo
