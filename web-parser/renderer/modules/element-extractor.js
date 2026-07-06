@@ -1315,6 +1315,8 @@ window.Parser = window.Parser || {};
         'var _hlStyle=document.getElementById("__parser_hl_anim");if(!_hlStyle){_hlStyle=document.createElement("style");_hlStyle.id="__parser_hl_anim";_hlStyle.textContent="@keyframes __parser_hl_pulse{0%,100%{opacity:0.85;transform:scale(1)}50%{opacity:1;transform:scale(1.02)}}";document.head.appendChild(_hlStyle);}' +
         // 清理旧高亮浮层
         'var oldOv=document.querySelectorAll(".__parser_auto_overlay");for(var oo=0;oo<oldOv.length;oo++){var ov=oldOv[oo];if(ov.parentNode){var op=ov.getAttribute("data-ppos");if(op!==null)ov.parentNode.style.position=op;ov.parentNode.removeChild(ov);}}' +
+        // 清理 __parserImgOverlays 中已移除的条目
+        'if(window.__parserImgOverlays){window.__parserImgOverlays=window.__parserImgOverlays.filter(function(o){return o&&o.parentNode;});}' +
         // highlightEl
         'var _hlCount=0;function highlightEl(el,isTemplate){var ov=document.createElement("div");ov.className="__parser_auto_overlay";ov.setAttribute("data-parser-box","1");var tag=el.tagName.toUpperCase();var isVoid=tag==="IMG"||tag==="INPUT"||tag==="BR"||tag==="HR"||tag==="SOURCE"||tag==="EMBED"||tag==="AREA";var re=el.getBoundingClientRect();if(re.width===0&&re.height===0)return;if(re.width<10&&re.height<10)return;' +
         'var borderColor=isTemplate?"#f59e0b":"#a78bfa";var bgColor=isTemplate?"rgba(245,158,11,0.22)":"rgba(167,139,250,0.18)";' +
@@ -1325,22 +1327,20 @@ window.Parser = window.Parser || {};
           'document.body.appendChild(ov);' +
           'if(!window.__parserImgOverlays)window.__parserImgOverlays=[];' +
           'window.__parserImgOverlays.push(ov);' +
-          'if(!window.__parserScrollBound){' +
-            'window.__parserScrollBound=true;' +
-            'var _hlTick=false;' +
-            'window.addEventListener("scroll",function(){' +
-              'if(_hlTick)return;_hlTick=true;' +
-              'requestAnimationFrame(function(){' +
-                '_hlTick=false;' +
-                'var ovs=window.__parserImgOverlays;if(!ovs)return;' +
-                'for(var oi=0;oi<ovs.length;oi++){' +
-                  'var o=ovs[oi];if(!o||!o.__parserImgEl)continue;' +
-                  'var nr=o.__parserImgEl.getBoundingClientRect();' +
-                  'o.style.left=nr.left+"px";o.style.top=nr.top+"px";' +
-                  'o.style.width=nr.width+"px";o.style.height=nr.height+"px";' +
-                '}' +
-              '});' +
-            '},{passive:true});' +
+          // rAF 循环：持续更新位置，覆盖所有滚动（窗口+子容器+程序化）
+          'if(!window.__parserRafRunning){' +
+            'window.__parserRafRunning=true;' +
+            '!function _raf(){' +
+              'var ovs2=window.__parserImgOverlays;' +
+              'if(!ovs2||ovs2.length===0){window.__parserRafRunning=false;return;}' +
+              'for(var ri=0;ri<ovs2.length;ri++){' +
+                'var ro=ovs2[ri];if(!ro||!ro.__parserImgEl||!ro.parentNode)continue;' +
+                'var rr=ro.__parserImgEl.getBoundingClientRect();' +
+                'ro.style.left=rr.left+"px";ro.style.top=rr.top+"px";' +
+                'ro.style.width=rr.width+"px";ro.style.height=rr.height+"px";' +
+              '}' +
+              'requestAnimationFrame(_raf);' +
+            '}();' +
           '}' +
           'el.__parserBox=ov;' +
         '}else{var oldPos=el.style.position;ov.setAttribute("data-ppos",oldPos||"");if(!oldPos||oldPos==="static")el.style.position="relative";ov.style.cssText="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483640;border:4px solid "+borderColor+";border-radius:4px;box-sizing:border-box;background:"+bgColor+";box-shadow:0 0 12px rgba(167,139,250,0.3),0 0 24px rgba(167,139,250,0.15);animation:__parser_hl_pulse 1s ease-in-out";el.appendChild(ov);el.__parserBox=ov}_hlCount++;}' +
