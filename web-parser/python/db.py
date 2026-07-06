@@ -831,7 +831,6 @@ def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[
                 k = nr.get(next_link, "")
                 if k:
                     idx[k] = nr
-            prefix = next_name
             for h in next_headers:
                 if h != next_link:
                     if h not in all_headers:

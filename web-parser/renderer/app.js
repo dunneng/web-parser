@@ -7926,16 +7926,14 @@ window._editorCollapseAll = function() {
           var sr = await fetch(singleUrl, { signal: _chainFetchAbort ? _chainFetchAbort.signal : undefined });
           var sd = await sr.json();
           if (sd.rows && sd.rows.length > 0) {
-            var prefix = checked.length > 1 ? '【' + checked[ci].name + '】' : '';
             var sHeaders = sd.headers || [];
             sd.rows.forEach(function(row) {
               var newRow = {};
-              sHeaders.forEach(function(h) { newRow[prefix + h] = row[h] || ''; });
+              sHeaders.forEach(function(h) { newRow[h] = row[h] || ''; });
               allRows.push(newRow);
             });
             sHeaders.forEach(function(h) {
-              var ph = prefix + h;
-              if (allHeaders.indexOf(ph) < 0) allHeaders.push(ph);
+              if (allHeaders.indexOf(h) < 0) allHeaders.push(h);
             });
           }
         } catch(e) { if (e.name === 'AbortError') throw e; }
@@ -10670,16 +10668,14 @@ window._editorCollapseAll = function() {
             var vResp = await fetch(vUrl);
             var vData = await vResp.json();
             if (vData.rows && vData.rows.length > 0) {
-              var vPrefix = checked.length > 1 ? '【' + checked[vi].name + '】' : '';
               var vHeaders = vData.headers || [];
               vData.rows.forEach(function(r) {
                 var nr = {};
-                vHeaders.forEach(function(h) { nr[vPrefix + h] = r[h] || ''; });
+                vHeaders.forEach(function(h) { nr[h] = r[h] || ''; });
                 mergedRows.push(nr);
               });
               vHeaders.forEach(function(h) {
-                var ph = vPrefix + h;
-                if (allHeaders.indexOf(ph) < 0) allHeaders.push(ph);
+                if (allHeaders.indexOf(h) < 0) allHeaders.push(h);
               });
             }
           }
