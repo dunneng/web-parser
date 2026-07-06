@@ -7779,7 +7779,7 @@ window._editorCollapseAll = function() {
             var pageResult = await apiResp.json();
             if (pageResult && !pageResult.error && pageResult.rows) {
               var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
-              pageResult.rows.forEach(function(r) { r[srcUrlCol] = snap.url || ''; });
+              pageResult.rows.forEach(function(r) { r["来源URL"] = snap.url || ''; });
               result.rows = result.rows.concat(pageResult.rows);
               result.totalRows += pageResult.totalRows || pageResult.rows.length;
               if (!result.headers.length && pageResult.headers.length) result.headers = pageResult.headers;
@@ -10150,7 +10150,7 @@ window._editorCollapseAll = function() {
               var pageResult = await resp.json();
               if (pageResult && !pageResult.error && pageResult.rows) {
                 var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
-                pageResult.rows.forEach(function(r) { r[srcUrlCol] = snap.url || ''; });
+                pageResult.rows.forEach(function(r) { r["来源URL"] = snap.url || ''; });
                 // 不推入 headers
                 mergedRows = mergedRows.concat(pageResult.rows);
                 if (!mergedHeaders.length && pageResult.headers) mergedHeaders = pageResult.headers;
