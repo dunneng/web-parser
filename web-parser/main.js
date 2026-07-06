@@ -185,18 +185,31 @@ async function startPythonBackend() {
 }
 
 function stopPythonBackend() {
-  // 清理采集数据
-  try {
-    const collectedDir = path.join(__dirname, 'python', 'collected');
-    if (fs.existsSync(collectedDir)) {
-      fs.readdirSync(collectedDir).forEach(f => fs.unlinkSync(path.join(collectedDir, f)));
+  return new Promise((resolve) => {
+    // 清理采集数据
+    try {
+      const collectedDir = path.join(__dirname, 'python', 'collected');
+      if (fs.existsSync(collectedDir)) {
+        fs.readdirSync(collectedDir).forEach(f => fs.unlinkSync(path.join(collectedDir, f)));
+      }
+    } catch (e) {}
+    if (pythonProcess) {
+      console.log('[Python] 正在关闭...');
+      const proc = pythonProcess;
+      pythonProcess = null;
+      // 等进程真正退出再 resolve，确保文件锁释放
+      proc.on('exit', () => {
+        console.log('[Python] 已退出');
+        // 额外等 300ms 让 Windows 释放文件句柄
+        setTimeout(resolve, 300);
+      });
+      proc.kill();
+      // 兜底：5秒后无论如何 resolve
+      setTimeout(resolve, 5000);
+    } else {
+      resolve();
     }
-  } catch (e) {}
-  if (pythonProcess) {
-    console.log('[Python] 正在关闭...');
-    pythonProcess.kill();
-    pythonProcess = null;
-  }
+  });
 }
 
 function waitForPython(timeout = 15000) {
@@ -1100,43 +1113,52 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  stopPythonBackend();
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 app.on('before-quit', async () => {
-  stopPythonBackend();
+  await stopPythonBackend();
   // 关闭时清空数据
   var dbPath = path.join(__dirname, 'python', 'data', 'parser.db');
   var qdrantPath = path.join(__dirname, 'python', 'data', 'qdrant_storage');
-  try { fs.unlinkSync(dbPath); } catch (e) {}
+  // 重试删除 DB 文件（Windows 文件锁可能延迟释放）
+  for (var attempt = 0; attempt < 5; attempt++) {
+    try { fs.unlinkSync(dbPath); console.log('[清理] parser.db 已删除'); break; }
+    catch (e) { if (attempt >= 4) console.log('[清理] parser.db 删除失败:', e.message); }
+    var w = Date.now() + 500; while (Date.now() < w) {}
+  }
   try { fs.unlinkSync(dbPath + '-wal'); } catch (e) {}
   try { fs.unlinkSync(dbPath + '-shm'); } catch (e) {}
   try { fs.rmSync(qdrantPath, { recursive: true, force: true }); } catch (e) {}
   try { fs.unlinkSync(getHistoryPath()); } catch (e) {}
-  // 延时 2 秒等 Chromium 释放锁，然后清理 leveldb
-  setTimeout(function() {
-    var dataDir = path.join(app.getPath('userData'), 'Local Storage');
-    var leveldbDir = path.join(dataDir, 'leveldb');
-    for (var attempt = 0; attempt < 5; attempt++) {
-      try {
-        if (fs.existsSync(leveldbDir)) {
-          fs.rmSync(leveldbDir, { recursive: true, force: true });
-        }
-        try { fs.rmdirSync(dataDir); } catch (e) {}
-        break;
-      } catch (e) {
-        if (attempt < 4) { var waitUntil = Date.now() + 1000; while (Date.now() < waitUntil) {} }
+  // 清理 localStorage (leveldb)
+  var dataDir = path.join(app.getPath('userData'), 'Local Storage');
+  var leveldbDir = path.join(dataDir, 'leveldb');
+  for (var attempt2 = 0; attempt2 < 5; attempt2++) {
+    try {
+      if (fs.existsSync(leveldbDir)) {
+        fs.rmSync(leveldbDir, { recursive: true, force: true });
       }
+      try { fs.rmdirSync(dataDir); } catch (e) {}
+      console.log('[清理] localStorage 已删除');
+      break;
+    } catch (e) {
+      if (attempt2 >= 4) console.log('[清理] localStorage 删除失败:', e.message);
+      var w2 = Date.now() + 500; while (Date.now() < w2) {}
     }
-  }, 2000);
+  }
 });
 
 app.on('will-quit', () => {
-  var dataDir = path.join(app.getPath('userData'), 'Local Storage');
-  var leveldbDir = path.join(dataDir, 'leveldb');
-  try { if (fs.existsSync(leveldbDir)) fs.rmSync(leveldbDir, { recursive: true, force: true }); } catch (e) {}
-  try { fs.rmdirSync(dataDir); } catch (e) {}
+  // will-quit 时再做一次兜底清理
+  var dbPath2 = path.join(__dirname, 'python', 'data', 'parser.db');
+  try { fs.unlinkSync(dbPath2); } catch (e) {}
+  try { fs.unlinkSync(dbPath2 + '-wal'); } catch (e) {}
+  try { fs.unlinkSync(dbPath2 + '-shm'); } catch (e) {}
+  var dataDir2 = path.join(app.getPath('userData'), 'Local Storage');
+  var leveldbDir2 = path.join(dataDir2, 'leveldb');
+  try { if (fs.existsSync(leveldbDir2)) fs.rmSync(leveldbDir2, { recursive: true, force: true }); } catch (e) {}
+  try { fs.rmdirSync(dataDir2); } catch (e) {}
 });
