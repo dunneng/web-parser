@@ -10108,9 +10108,44 @@ window._editorCollapseAll = function() {
       var schema = buildChainSchema();
       var fields = schema.fields.filter(function(f) { return f.isText || f.childText || (f.attr && f.attr.trim()); });
       if (fields.length === 0) {
-        schemaPreviewInfo.textContent = '';
+        // 无字段时做快速计数，确认选择器是否匹配元素
+        var quickCount = 0;
+        try {
+          var qwv = document.getElementById('webview');
+          if (qwv) {
+            var qSnaps = [];
+            try {
+              var qSlResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list');
+              if (qSlResp.ok) qSnaps = (await qSlResp.json()).snapshots || [];
+            } catch(e) {}
+            var qHtmls = [];
+            if (qSnaps.length > 0) {
+              for (var qsi = 0; qsi < qSnaps.length; qsi++) {
+                try {
+                  var qShResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/' + qSnaps[qsi].id + '/html');
+                  if (qShResp.ok) { var d2 = await qShResp.json(); if (d2.html) qHtmls.push(d2.html); }
+                } catch(e) {}
+              }
+            } else {
+              var qHtml = await qwv.executeJavaScript('document.documentElement.outerHTML');
+              if (qHtml) qHtmls.push(qHtml);
+            }
+            for (var qhi = 0; qhi < qHtmls.length; qhi++) {
+              var qResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/css', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ html: qHtmls[qhi], query: schema.deepestSelector || '' })
+              });
+              var qData = await qResp.json();
+              quickCount += qData.count || 0;
+            }
+          }
+        } catch(e) {}
+        var countMsg = quickCount > 0
+          ? '共 ' + quickCount + ' 个匹配' + (qHtmls && qHtmls.length > 1 ? '（' + qHtmls.length + '页）' : '') + '，请配置提取属性'
+          : '未找到匹配元素，请检查选择器';
+        schemaPreviewInfo.textContent = countMsg;
         resetChainCounts();
-        if (schemaPreviewWrap) schemaPreviewWrap.innerHTML = '';
+        if (schemaPreviewWrap) schemaPreviewWrap.innerHTML = '<div class="tree-empty">' + countMsg + '</div>';
         return;
       }
       // 调 Python 后端提取（有快照走快照，否则走当前 webview）
