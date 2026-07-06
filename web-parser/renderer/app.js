@@ -3705,7 +3705,7 @@ window._editorCollapseAll = function() {
       const headers = [];
       ths.forEach(function(th) {
         var t = th.textContent.trim();
-        if (t && t !== '#') headers.push(t);
+        if (t && t !== '#' && t !== '来源URL') headers.push(t);
       });
       const resp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/export/excel', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows, format: 'xlsx', headers }),
@@ -7492,7 +7492,7 @@ window._editorCollapseAll = function() {
     if (!row || !linkSel || !schemeSel) return;
     // 从快速预览取列名
     var preview = Parser.state.schemaPreviewData;
-    var headers = preview && preview.headers ? preview.headers.filter(function(k) { return k.charAt(0) !== '_'; }) : [];
+    var headers = preview && preview.headers ? preview.headers.filter(function(k) { return k !== '来源URL' && k.charAt(0) !== '_'; }) : [];
     if (headers.length === 0) { row.style.display = 'none'; return; }
     row.style.display = 'flex';
     // 填充链接列下拉
@@ -10693,7 +10693,14 @@ window._editorCollapseAll = function() {
           var dbResp = await fetch(qUrl);
           var dbData = await dbResp.json();
           mergedRows = dbData.rows || [];
-          allHeaders = dbData.headers || [];
+            allHeaders = dbData.headers || [];
+            // 过滤内部列
+            allHeaders = allHeaders.filter(function(h) { return h !== '来源URL' && h.charAt(0) !== '_'; });
+            mergedRows = mergedRows.map(function(r) {
+              var clean = {};
+              allHeaders.forEach(function(h) { clean[h] = r[h] || ''; });
+              return clean;
+            });
         }
         hideAllPanels();
         queryContainer.classList.remove('hidden');
