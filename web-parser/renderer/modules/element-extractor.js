@@ -1320,7 +1320,7 @@ window.Parser = window.Parser || {};
         'var borderColor=isTemplate?"#f59e0b":"#a78bfa";var bgColor=isTemplate?"rgba(245,158,11,0.22)":"rgba(167,139,250,0.18)";' +
         'if(isVoid){' +
           // void 元素：fixed 定位挂 body + scroll 跟随，和 drawBox 一致
-          'ov.style.cssText="position:fixed;pointer-events:none;z-index:2147483640;left:"+re.left+"px;top:"+re.top+"px;width:"+re.width+"px;height:"+re.height+"px;border:4px solid "+borderColor+";border-radius:4px;background:"+bgColor+";box-shadow:0 0 12px rgba(167,139,250,0.3),0 0 24px rgba(167,139,250,0.15);animation:__parser_hl_pulse 1s ease-in-out";' +
+          'ov.style.cssText="position:fixed;pointer-events:none;z-index:2147483640;left:"+re.left+"px;top:"+re.top+"px;width:"+re.width+"px;height:"+re.height+"px;border:4px solid "+borderColor+";border-radius:4px;box-sizing:border-box;background:"+bgColor+";box-shadow:0 0 12px rgba(167,139,250,0.3),0 0 24px rgba(167,139,250,0.15);animation:__parser_hl_pulse 1s ease-in-out";' +
           'ov.__parserImgEl=el;' +
           'document.body.appendChild(ov);' +
           'if(!window.__parserImgOverlays)window.__parserImgOverlays=[];' +
