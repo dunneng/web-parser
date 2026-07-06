@@ -636,7 +636,7 @@ window.Parser = window.Parser || {};
     var _cnSelector = _isClickNext ? ($('#batchClickNextSelector').value || '').trim() : '';
     var _cnInterval = (_isClickNext || _isManual) ? (parseInt($('#batchClickNextInterval').value) || 2000) : 0;
     var _cnPreWait = _isClickNext ? (parseInt($('#batchClickNextPreWait').value) || 500) : 0;
-    var _cnMaxPages = (_isClickNext || _isManual) ? (parseInt($('#batchPageEnd').value) || 10) : 0;
+    var _cnMaxPages = (_isClickNext || _isManual) ? (parseInt($('#batchPageEnd').value) || 1) : 0;
 
     S.batchTasks = [];
     S.batchAllResults = [];
