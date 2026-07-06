@@ -814,8 +814,8 @@ def get_chain_data(scheme_names: list[str], link_col: str = "") -> dict:
             prev_headers = scheme_results[bi - 1][2]
             # 逐级检测：优先用 footer 下拉选的 link_col，否则自动检测
             step_link = link_col if (bi == 1 and link_col) else _find_link_col(prev_headers)
-            # link_col 非空直接用作 next 方案的合并键（rows 里有即可，不要求 headers 可见）
-            next_link = link_col if link_col else _find_link_col(next_headers)
+            # link_col 非空直接用作 next 方案的合并键；否则优先用"来源URL"（快照URL与上一方案的链接一致）
+            next_link = link_col if link_col else ('来源URL' if '来源URL' in next_headers else _find_link_col(next_headers))
             if not step_link or not next_link:
                 # 无共同链接列 → 竖向拼接
                 for r in next_rows:
