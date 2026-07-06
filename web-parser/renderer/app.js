@@ -8214,8 +8214,34 @@ window._editorCollapseAll = function() {
     try {
       var ancestors = await webview.executeJavaScript(jsCode);
       if (!ancestors || !ancestors.length) {
-        chainTraceResult.innerHTML = '<div style="padding:6px 12px;font-size:12px;color:var(--red)">未找到匹配元素</div>';
-        return;
+        // webview 当前页未找到 → 尝试从快照 HTML 中溯源
+        var snapAncestors = null;
+        try {
+          var saResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list');
+          if (saResp.ok) {
+            var saData = await saResp.json();
+            var saSnaps = saData.snapshots || [];
+            for (var sai = 0; sai < saSnaps.length && !snapAncestors; sai++) {
+              var shResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/' + saSnaps[sai].id + '/html');
+              if (!shResp.ok) continue;
+              var shData = await shResp.json();
+              if (!shData.html) continue;
+              var trResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/trace', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ html: shData.html, chain_type: type, deepest_selector: querySel })
+              });
+              var trData = await trResp.json();
+              if (trData.ancestors && trData.ancestors.length > 0) {
+                snapAncestors = trData.ancestors;
+              }
+            }
+          }
+        } catch(e) {}
+        if (!snapAncestors) {
+          chainTraceResult.innerHTML = '<div style="padding:6px 12px;font-size:12px;color:var(--red)">未找到匹配元素</div>';
+          return;
+        }
+        ancestors = snapAncestors;
       }
 
       var parts = ancestors.slice().reverse().map(function(info) {

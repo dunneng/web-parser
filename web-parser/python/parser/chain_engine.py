@@ -46,6 +46,46 @@ def _walk_sub_chain(el, sub_chain: dict):
     return target
 
 
+def trace_chain_backend(raw_html: str, chain_type: str, selector: str) -> dict:
+    """从 HTML 中用 lxml 做 DOM 溯源，返回祖先链 [{t,c,i},...]（从根到最深）"""
+    try:
+        doc = html.document_fromstring(raw_html)
+    except Exception:
+        return {"ancestors": [], "error": "HTML parse fail"}
+
+    try:
+        if chain_type == 'xpath':
+            els = doc.xpath(selector)
+        else:
+            els = doc.cssselect(selector)
+            if not els:
+                from lxml.cssselect import CSSSelector
+                try:
+                    els = doc.xpath(CSSSelector(selector).path)
+                except Exception:
+                    pass
+    except Exception as e:
+        return {"ancestors": [], "error": str(e)}
+
+    if not els:
+        return {"ancestors": [], "html_len": len(raw_html)}
+
+    el = els[0]
+    ancestors = []
+    # 走到 body/html 或最多 10 层
+    while el is not None and el.tag is not etree.Comment and len(ancestors) < 10:
+        tag = (el.tag or '').lower()
+        if tag in ('html', 'body'):
+            break
+        cls = (el.get('class') or '').strip()
+        first_cls = cls.split()[0] if cls else ''
+        el_id = (el.get('id') or '').strip()
+        ancestors.append({"t": tag, "c": first_cls, "i": el_id})
+        el = el.getparent()
+
+    # 返回 deepest→root 顺序（与前端 webview.executeJavaScript 一致），前端会 slice().reverse() 转回 root→deepest
+    return {"ancestors": ancestors}
+
 def chain_extract(raw_html: str, chain_type: str, deepest_selector: str,
                   fields: list[dict], child_delim: str = "") -> dict:
     """执行链路提取，返回 {rows, counts, totalRows, headers}"""

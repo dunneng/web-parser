@@ -38,7 +38,7 @@ from parser.xpath_engine import xpath_query
 from parser.css_engine import css_query
 from parser.regex_engine import regex_search
 from parser.jsonpath_engine import jsonpath_query
-from parser.chain_engine import chain_extract
+from parser.chain_engine import chain_extract, trace_chain_backend
 import db
 import product_pipeline
 
@@ -548,6 +548,15 @@ async def extract_chain(req: ChainRequest):
     result = chain_extract(req.html, req.chain_type, req.deepest_selector, req.fields, req.child_delim)
     logger.info(f"[链路] 结果: {result.get('totalRows',0)} 行, targets={result.get('_debug',{}).get('target_count','?')}")
     return result
+
+@app.post("/api/extract/trace")
+async def extract_trace(req: ChainRequest):
+    """从 HTML 中用 lxml 做溯源，返回祖先链（不依赖浏览器 DOM）"""
+    if not req.html or not req.html.strip():
+        raise HTTPException(400, "HTML 为空")
+    if not req.deepest_selector:
+        raise HTTPException(400, "deepest_selector 为空")
+    return trace_chain_backend(req.html, req.chain_type or 'css', req.deepest_selector)
 
 # ──────── Cookie 管理 ────────
 @app.get("/api/cookies/{domain}")
