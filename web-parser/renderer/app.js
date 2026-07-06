@@ -7703,6 +7703,7 @@ window._editorCollapseAll = function() {
         if (schemaPreviewInfo) schemaPreviewInfo.textContent = '';
       }
     }
+    _renderMergeModeToggle();
   }
 
   var _chainFetchAbort = null;  // 防止快速切换竞态
