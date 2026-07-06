@@ -149,6 +149,8 @@ def chain_extract(raw_html: str, chain_type: str, deepest_selector: str,
             values.append(v)
 
         columns.append(values)
+        non_empty = sum(1 for v in values if v and str(v).strip())
+        logger.info(f"[链路] 字段 '{name}' (chainIndex={chain_index}, walkUp={walk_up}) → {non_empty}/{len(values)} 条非空")
         if len(values) > max_len:
             max_len = len(values)
 
