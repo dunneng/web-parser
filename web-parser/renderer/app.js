@@ -7805,6 +7805,30 @@ window._editorCollapseAll = function() {
             if (pageResult && !pageResult.error && pageResult.rows) {
               var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
               pageResult.rows.forEach(function(r) { r["来源URL"] = snap.url || ''; });
+              // 用注册元素补充字段
+              try {
+                var elResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements');
+                if (elResp.ok) {
+                  var elData = await elResp.json();
+                  var elems = (elData.elements || []).filter(function(e) {
+                    return e.page_url === snap.url;
+                  });
+                  for (var ei2 = 0; ei2 < elems.length; ei2++) {
+                    var elem = elems[ei2];
+                    var cssResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/css', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ html: snapHtml, query: elem.selector })
+                    });
+                    var cssData = await cssResp.json();
+                    var vals = (cssData.results || []).map(function(r2) { return r2.text || ''; });
+                    var colName = elem.text || elem.selector;
+                    if (pageResult.headers.indexOf(colName) < 0) pageResult.headers.push(colName);
+                    for (var ri = 0; ri < pageResult.rows.length; ri++) {
+                      pageResult.rows[ri][colName] = (ri < vals.length ? vals[ri] : '');
+                    }
+                  }
+                }
+              } catch(e) {}
               result.rows = result.rows.concat(pageResult.rows);
               result.totalRows += pageResult.totalRows || pageResult.rows.length;
               if (!result.headers.length && pageResult.headers.length) result.headers = pageResult.headers;
