@@ -19,7 +19,7 @@ if sys.platform == 'win32':
     except Exception:
         pass
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -917,7 +917,17 @@ class ChainDataSaveRequest(BaseModel):
 
 @app.post("/api/chain-data/save")
 async def save_chain_data(req: ChainDataSaveRequest):
+    logger.info(f"[保存] scheme={req.scheme_name} headers={req.headers} rows={len(req.rows)}")
+    if req.rows and len(req.rows) > 0:
+        logger.info(f"[保存] 第1行: { {k: str(v)[:40] for k, v in list(req.rows[0].items())[:8]} }")
     return db.save_chain_data(req.scheme_name, req.rows, req.headers)
+
+@app.post("/api/debug")
+async def debug_log(req: dict = Body(None)):
+    """前端调试日志 → 后端黑窗"""
+    msg = (req or {}).get("msg", "")
+    logger.info(f"[前端] {msg}")
+    return {"ok": True}
 
 @app.get("/api/chain-data/query")
 async def query_chain_data(schemes: str = "", link_col: str = ""):

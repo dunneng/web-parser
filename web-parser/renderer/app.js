@@ -6872,6 +6872,15 @@ window._editorCollapseAll = function() {
       });
     });
   }
+  /** 发送调试日志到后端黑窗 */
+  function _debugLog(msg) {
+    try {
+      fetch('http://127.0.0.1:' + (Parser.state.pythonPort || 19527) + '/api/debug', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({msg: msg})
+      }).catch(function(){});
+    } catch(e) {}
+  }
   window._showAllPreviewRows = function() {
     if (Parser.state.schemaPreviewData) renderModalPreviewTable(Parser.state.schemaPreviewData, true);
   };
@@ -8356,6 +8365,7 @@ window._editorCollapseAll = function() {
 
   /** 解析链路 */
   function parseChain() {
+    _debugLog('[parseChain] 输入: ' + schemaChainInput.value.trim().substring(0, 100));
     var type = getChainType();
     var chain = schemaChainInput.value.trim();
     if (!chain) return;
@@ -10368,6 +10378,7 @@ window._editorCollapseAll = function() {
     }
 
     var name = schemaName.value.trim() || Parser.state.schemaCurrentName || '';
+    _debugLog('[buildChainSchema] ' + deepestSelector.substring(0, 60) + ' → ' + fields.length + '字段: ' + JSON.stringify(fields.map(function(f){return f.name})));
     return {
       name: name,
       mode: 'chain',
