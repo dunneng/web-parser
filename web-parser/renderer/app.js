@@ -8470,38 +8470,47 @@ window._editorCollapseAll = function() {
     _expandedChains = {};
     Parser.state._chainHeaderOrder = null;
     Parser.state.schemaPreviewData = null;  // 清除旧预览，强制重新提取
-    // 从勾选方案恢复提取属性（解析会清空 extractions）
+    // 从勾选方案恢复提取属性（仅当 deepestSelector 匹配时）
     var checkedSchemes = (Parser.state.chainSchemes || []).filter(function(s) { return s.checked !== false; });
     if (checkedSchemes.length === 1 && checkedSchemes[0].schema && checkedSchemes[0].schema.fields) {
       var sch = checkedSchemes[0].schema;
-      sch.fields.forEach(function(f) {
-        if (f.type !== 'chain') return;
-        var ext = f.childText
-          ? { attr: '$childText', name: f.name || '', childSelectors: f.childSelectors || [], childDelimiter: f.childDelimiter || '' }
-          : { attr: f.isText ? '$text' : (f.attr || ''), name: f.name || '' };
-        var seg = Parser.state.chainSegments[f.chainIndex];
-        if (!seg) return;
-        if (!seg.extractions) seg.extractions = [];
-        var dup = seg.extractions.some(function(e) { return e.attr === ext.attr; });
-        if (!dup) seg.extractions.push(ext);
-      });
+      var schDeepest = sch.deepestSelector || '';
+      var curDeepest = (Parser.state.chainSegments.length > 0 && Parser.state.chainSegments[Parser.state.chainSegments.length - 1]) ? Parser.state.chainSegments[Parser.state.chainSegments.length - 1].selector : '';
+      if (schDeepest === curDeepest) {
+        sch.fields.forEach(function(f) {
+          if (f.type !== 'chain') return;
+          var ext = f.childText
+            ? { attr: '$childText', name: f.name || '', childSelectors: f.childSelectors || [], childDelimiter: f.childDelimiter || '' }
+            : { attr: f.isText ? '$text' : (f.attr || ''), name: f.name || '' };
+          var seg = Parser.state.chainSegments[f.chainIndex];
+          if (!seg) return;
+          if (!seg.extractions) seg.extractions = [];
+          var dup = seg.extractions.some(function(e) { return e.attr === ext.attr; });
+          if (!dup) seg.extractions.push(ext);
+        });
+      }
     }
-    // 保留旧的 subChains 和 extractions（parseChain 重建段会清掉）
+    // 保留旧的 subChains 和 extractions（仅当链路结构未变时）
+    var oldDeepest = (oldSegs.length > 0 && oldSegs[oldSegs.length - 1]) ? oldSegs[oldSegs.length - 1].selector : '';
+    var newDeepest = (Parser.state.chainSegments.length > 0 && Parser.state.chainSegments[Parser.state.chainSegments.length - 1]) ? Parser.state.chainSegments[Parser.state.chainSegments.length - 1].selector : '';
+    var sameStructure = oldSegs.length === Parser.state.chainSegments.length && oldDeepest === newDeepest;
     for (var i = 0; i < Parser.state.chainSegments.length; i++) {
       var old = oldSegs[i];
       if (!old) continue;
-      if (old.subChains && old.subChains.length) {
+      if (sameStructure && old.subChains && old.subChains.length) {
         Parser.state.chainSegments[i].subChains = old.subChains;
       }
-      // 合并旧 extractions（attr+name 去重，保留旧数据的 childSelectors）
-      var newExts = Parser.state.chainSegments[i].extractions || [];
-      (old.extractions || []).forEach(function(oe) {
-        if (!oe.attr || !oe.attr.trim()) return;
-        if (!newExts.some(function(ne) { return ne.attr === oe.attr && ne.name === oe.name; })) {
-          newExts.push(oe);
-        }
-      });
-      Parser.state.chainSegments[i].extractions = newExts;
+      // 合并旧 extractions（attr+name 去重，仅当链路结构未变）
+      if (sameStructure) {
+        var newExts = Parser.state.chainSegments[i].extractions || [];
+        (old.extractions || []).forEach(function(oe) {
+          if (!oe.attr || !oe.attr.trim()) return;
+          if (!newExts.some(function(ne) { return ne.attr === oe.attr && ne.name === oe.name; })) {
+            newExts.push(oe);
+          }
+        });
+        Parser.state.chainSegments[i].extractions = newExts;
+      }
     }
     Parser.state._chainSegmentsBackup = JSON.parse(JSON.stringify(Parser.state.chainSegments));  // 备份
     renderChainTree();
