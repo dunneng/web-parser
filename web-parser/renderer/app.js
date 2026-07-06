@@ -7733,6 +7733,7 @@ window._editorCollapseAll = function() {
       var useSnapshots = pageSnapshots.length > 0;
       if (useSnapshots) {
         result = { rows: [], headers: [], totalRows: 0 };
+        var ssTotal = pageSnapshots.length, ssLoaded = 0, ssMatched = 0;
         for (var si = 0; si < pageSnapshots.length; si++) {
           var snap = pageSnapshots[si];
           try {
@@ -7745,6 +7746,7 @@ window._editorCollapseAll = function() {
             }
             var snapHtml = snapCache[snap.id];
             if (!snapHtml) continue;
+            ssLoaded++;
             var fetchOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ html: snapHtml, chain_type: schema.chainType || 'css', deepest_selector: schema.deepestSelector || '', fields: fields, child_delim: schema.childDelimiter || '' }) };
             if (signal) fetchOpts.signal = signal;
@@ -7753,13 +7755,14 @@ window._editorCollapseAll = function() {
             if (pageResult && !pageResult.error && pageResult.rows) {
               var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
               pageResult.rows.forEach(function(r) { r[srcUrlCol] = snap.url || ''; });
-              // 不推入 headers: rows 里有即可，预览/导出不显示
               result.rows = result.rows.concat(pageResult.rows);
               result.totalRows += pageResult.totalRows || pageResult.rows.length;
               if (!result.headers.length && pageResult.headers.length) result.headers = pageResult.headers;
+              ssMatched++;
             }
           } catch(e) { if (e.name === 'AbortError') throw e; }
         }
+        result._diag = { snapTotal: ssTotal, snapLoaded: ssLoaded, snapMatched: ssMatched };
       } else {
         // 从当前 webview 提取
         var html = await wv.executeJavaScript('document.documentElement.outerHTML');
@@ -10061,6 +10064,7 @@ window._editorCollapseAll = function() {
         if (snapList.length > 0) {
           // 有快照 → 逐页提取并合并
           var mergedRows = [], mergedHeaders = [], mergedCounts = [];
+          var snapTotal = snapList.length, snapLoaded = 0, snapMatched = 0;
           for (var si = 0; si < snapList.length; si++) {
             var snap = snapList[si];
             try {
@@ -10069,6 +10073,7 @@ window._editorCollapseAll = function() {
               var shData = await shResp.json();
               var snapHtml = shData.html;
               if (!snapHtml) continue;
+              snapLoaded++;
               var resp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -10084,10 +10089,12 @@ window._editorCollapseAll = function() {
                 mergedRows = mergedRows.concat(pageResult.rows);
                 if (!mergedHeaders.length && pageResult.headers) mergedHeaders = pageResult.headers;
                 if (pageResult.counts) mergedCounts = pageResult.counts;
+                snapMatched++;
               }
             } catch(e) {}
           }
-          result = { rows: mergedRows, headers: mergedHeaders, counts: mergedCounts, totalRows: mergedRows.length };
+          result = { rows: mergedRows, headers: mergedHeaders, counts: mergedCounts, totalRows: mergedRows.length,
+            _diag: { snapTotal: snapTotal, snapLoaded: snapLoaded, snapMatched: snapMatched } };
         } else {
           // 无快照 → 只取当前页
           var html = await wv.executeJavaScript('document.documentElement.outerHTML');
@@ -10114,7 +10121,9 @@ window._editorCollapseAll = function() {
         var totalRows = result.totalRows || 0;
         var headers = result.headers || [];
         var counts = result.counts || [];
-        schemaPreviewInfo.textContent = '共 ' + totalRows + ' 行，' + headers.length + ' 列';
+        var diag = result._diag;
+        var diagStr = diag ? '（快照' + diag.snapTotal + '页，加载' + diag.snapLoaded + '页，命中' + diag.snapMatched + '页）' : '';
+        schemaPreviewInfo.textContent = '共 ' + totalRows + ' 行，' + headers.length + ' 列' + diagStr;
         updateChainCounts(counts);
         renderModalPreviewTable(result);
       } catch(e) {
