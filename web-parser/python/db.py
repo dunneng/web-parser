@@ -834,16 +834,14 @@ def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[
             prefix = next_name
             for h in next_headers:
                 if h != next_link:
-                    prefixed = f"【{prefix}-{h}】"
-                    if prefixed not in all_headers:
-                        all_headers.append(prefixed)
+                    if h not in all_headers:
+                        all_headers.append(h)
             for br in merged_rows:
                 key = br.get(step_link, "")
                 match = idx.get(key) if key else None
                 for h in next_headers:
                     if h != next_link:
-                        prefixed = f"【{prefix}-{h}】"
-                        br[prefixed] = match[h] if (match and h in match) else ""
+                        br[h] = match[h] if (match and h in match) else ""
         return {"rows": merged_rows, "headers": all_headers, "totalRows": len(merged_rows)}
 
     # ── 垂直拼接（只有一个方案）──
