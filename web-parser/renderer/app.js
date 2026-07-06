@@ -6765,8 +6765,22 @@ window._editorCollapseAll = function() {
     if (!schemaPreviewWrap) return;
     var rows = result.rows || [];
     var headers = result.headers || [];
+    // 合并模式切换（仅多方案时显示）
+    var checked = (Parser.state.chainSchemes || []).filter(function(s) { return s.checked !== false; });
+    var modeBar = '';
+    if (checked.length >= 2) {
+      var isH = Parser.state._chainMergeMode !== 'vertical';
+      modeBar = '<div class="merge-mode-bar" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px">' +
+        '<span class="merge-mode-label" style="color:var(--text-dim)">合并方式</span>' +
+        '<label class="toggle-switch" style="margin:0" title="横向合并：按链接列匹配合并列；纵向合并：追加行堆叠">' +
+          '<input type="checkbox" id="chainMergeModeToggle"' + (isH ? '' : ' checked') + ' onchange="window._toggleChainMergeMode(this.checked)">' +
+          '<span class="toggle-slider"></span>' +
+        '</label>' +
+        '<span id="mergeModeText" style="color:var(--accent);font-weight:600">' + (isH ? '横向' : '纵向') + '</span>' +
+      '</div>';
+    }
     var limit = showAll ? rows.length : Math.min(rows.length, 5);
-    var html = '<table class="schema-preview-table"><thead><tr><th style="width:30px">#</th>';
+    var html = modeBar + '<table class="schema-preview-table"><thead><tr><th style="width:30px">#</th>';
     headers.forEach(function(h, hi) {
       html += '<th draggable="true" data-col-idx="' + hi + '" class="draggable-col"><span class="col-grip">⠿</span> ' + escapeHtml(h) + '</th>';
     });
@@ -6874,6 +6888,12 @@ window._editorCollapseAll = function() {
   }
   window._showAllPreviewRows = function() {
     if (Parser.state.schemaPreviewData) renderModalPreviewTable(Parser.state.schemaPreviewData, true);
+  };
+  /** 切换多方案合并模式：横向/纵向 */
+  window._toggleChainMergeMode = function(vertical) {
+    Parser.state._chainMergeMode = vertical ? 'vertical' : 'horizontal';
+    var checked = (Parser.state.chainSchemes || []).filter(function(s) { return s.checked !== false; });
+    if (checked.length >= 2) _fetchChainDataFromDB(checked);
   };
   /** 根据预览表头顺序同步重排 schema fields */
   function _syncFieldOrderFromHeaders(headers) {
@@ -7556,6 +7576,7 @@ window._editorCollapseAll = function() {
   /** 链路方案管理 */
   if (!Parser.state.chainSchemes) Parser.state.chainSchemes = [];
   Parser.state._editingChainSchemeIdx = null;  // 当前编辑的方案索引，null=新建模式
+  Parser.state._chainMergeMode = 'horizontal';  // 多方案合并模式: horizontal 或 vertical
 
   function _chainSchemesKey() { return 'chainSchemes'; }
 
@@ -7868,31 +7889,63 @@ window._editorCollapseAll = function() {
     var previewWrap = document.getElementById('schemaPreviewWrap');
     var previewInfo = document.getElementById('schemaPreviewInfo');
     if (!previewWrap) return;
-    // 取消前一次请求和实时预览
     if (_chainFetchAbort) { _chainFetchAbort.abort(); _chainFetchAbort = null; }
     if (_chainPreviewTimer) { clearTimeout(_chainPreviewTimer); _chainPreviewTimer = null; }
     previewWrap.innerHTML = '<div class="tree-empty">从库加载中...</div>';
-    var names = checked.map(function(s) { return encodeURIComponent(s.name); }).join(',');
-    var linkCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '';
-    var url = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + names + (linkCol ? '&link_col=' + encodeURIComponent(linkCol) : '') + '&_=' + Date.now();
-    _chainFetchAbort = new AbortController();
-    try {
-      var resp = await fetch(url, { signal: _chainFetchAbort.signal });
-      _chainFetchAbort = null;
-      var data = await resp.json();
-      if (!data.rows || data.rows.length === 0) {
-        previewWrap.innerHTML = '<div class="tree-empty">该方案暂无数据</div>';
-        if (previewInfo) previewInfo.textContent = '';
+
+    var isVertical = Parser.state._chainMergeMode === 'vertical' && checked.length >= 2;
+    var data;
+
+    if (isVertical) {
+      // 纵向合并：逐个方案取数据，追加行，取并集列
+      var allRows = [], allHeaders = [];
+      for (var ci = 0; ci < checked.length; ci++) {
+        var singleUrl = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + encodeURIComponent(checked[ci].name) + '&_=' + Date.now();
+        try {
+          var sr = await fetch(singleUrl, { signal: _chainFetchAbort ? _chainFetchAbort.signal : undefined });
+          var sd = await sr.json();
+          if (sd.rows && sd.rows.length > 0) {
+            var prefix = checked.length > 1 ? '【' + checked[ci].name + '】' : '';
+            var sHeaders = sd.headers || [];
+            sd.rows.forEach(function(row) {
+              var newRow = {};
+              sHeaders.forEach(function(h) { newRow[prefix + h] = row[h] || ''; });
+              allRows.push(newRow);
+            });
+            sHeaders.forEach(function(h) {
+              var ph = prefix + h;
+              if (allHeaders.indexOf(ph) < 0) allHeaders.push(ph);
+            });
+          }
+        } catch(e) { if (e.name === 'AbortError') throw e; }
+      }
+      data = { rows: allRows, headers: allHeaders, totalRows: allRows.length };
+    } else {
+      var names = checked.map(function(s) { return encodeURIComponent(s.name); }).join(',');
+      var linkCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '';
+      var url = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + names + (linkCol ? '&link_col=' + encodeURIComponent(linkCol) : '') + '&_=' + Date.now();
+      _chainFetchAbort = new AbortController();
+      try {
+        var resp = await fetch(url, { signal: _chainFetchAbort.signal });
+        _chainFetchAbort = null;
+        data = await resp.json();
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        previewWrap.innerHTML = '<div class="tree-empty">加载失败: ' + e.message + '</div>';
         return;
       }
-      Parser.state.schemaPreviewData = data;
-      renderModalPreviewTable(data);
-      _refreshExportLinksBtn();
-      if (previewInfo) previewInfo.textContent = '共 ' + data.totalRows + ' 行，' + (data.headers || []).length + ' 列' + (checked.length > 1 ? '（合并）' : '');
-    } catch (e) {
-      if (e.name === 'AbortError') return;  // 被新请求取消，不报错
-      previewWrap.innerHTML = '<div class="tree-empty">加载失败: ' + e.message + '</div>';
     }
+
+    if (!data.rows || data.rows.length === 0) {
+      previewWrap.innerHTML = '<div class="tree-empty">该方案暂无数据</div>';
+      if (previewInfo) previewInfo.textContent = '';
+      return;
+    }
+    Parser.state.schemaPreviewData = data;
+    renderModalPreviewTable(data);
+    _refreshExportLinksBtn();
+    var modeLabel = isVertical ? '（纵向）' : (checked.length > 1 ? '（合并）' : '');
+    if (previewInfo) previewInfo.textContent = '共 ' + data.totalRows + ' 行，' + (data.headers || []).length + ' 列' + modeLabel;
   }
 
   // 下拉开关
@@ -8141,7 +8194,7 @@ window._editorCollapseAll = function() {
         'if(!it)return null;var r=[];var el=it;var maxLevels=10;' +
         'while(el&&el!==document.body&&el!==document.documentElement&&r.length<maxLevels){' +
           'var info={t:el.tagName?el.tagName.toLowerCase():"",c:"",i:""};' +
-          'if(el.className&&typeof el.className==="string"){var __c=el.className.trim().split(/\\s+/);for(var ci=0;ci<__c.length;ci++){if(!/^_|^sc-/.test(__c[ci])){info.c=__c[ci];break;}}if(!info.c&&__c[0])info.c=__c[0];}' +
+          'if(el.className&&typeof el.className==="string")info.c=el.className.trim().split(/\\s+/)[0]||"";' +
           'if(el.id)info.i=el.id;' +
           'r.push(info);el=el.parentElement;}' +
         'return r;}catch(e){return null;}})()';
@@ -8150,7 +8203,7 @@ window._editorCollapseAll = function() {
         ');if(!el)return null;var r=[];var maxLevels=10;' +
         'while(el&&el!==document.body&&el!==document.documentElement&&r.length<maxLevels){' +
           'var info={t:el.tagName?el.tagName.toLowerCase():"",c:"",i:""};' +
-          'if(el.className&&typeof el.className==="string"){var __c=el.className.trim().split(/\\s+/);for(var ci=0;ci<__c.length;ci++){if(!/^_|^sc-/.test(__c[ci])){info.c=__c[ci];break;}}if(!info.c&&__c[0])info.c=__c[0];}' +
+          'if(el.className&&typeof el.className==="string")info.c=el.className.trim().split(/\\s+/)[0]||"";' +
           'if(el.id)info.i=el.id;' +
           'r.push(info);el=el.parentElement;}' +
         'return r;}catch(e){return null;}})()';
@@ -10512,13 +10565,37 @@ window._editorCollapseAll = function() {
           return;
         }
         // 合并走 DB 缓存（保证列表用存好的数据，不受实时提取影响）
-        var linkCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '';
-        var names = checked.map(function(s) { return encodeURIComponent(s.name); }).join(',');
-        var qUrl = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + names + (linkCol ? '&link_col=' + encodeURIComponent(linkCol) : '');
-        var dbResp = await fetch(qUrl);
-        var dbData = await dbResp.json();
-        var mergedRows = dbData.rows || [];
-        var allHeaders = dbData.headers || [];
+        var isVert = Parser.state._chainMergeMode === 'vertical' && checked.length >= 2;
+        var mergedRows = [], allHeaders = [];
+        if (isVert) {
+          // 纵向合并：逐个方案读DB，追加行，取并集列
+          for (var vi = 0; vi < checked.length; vi++) {
+            var vUrl = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + encodeURIComponent(checked[vi].name);
+            var vResp = await fetch(vUrl);
+            var vData = await vResp.json();
+            if (vData.rows && vData.rows.length > 0) {
+              var vPrefix = checked.length > 1 ? '【' + checked[vi].name + '】' : '';
+              var vHeaders = vData.headers || [];
+              vData.rows.forEach(function(r) {
+                var nr = {};
+                vHeaders.forEach(function(h) { nr[vPrefix + h] = r[h] || ''; });
+                mergedRows.push(nr);
+              });
+              vHeaders.forEach(function(h) {
+                var ph = vPrefix + h;
+                if (allHeaders.indexOf(ph) < 0) allHeaders.push(ph);
+              });
+            }
+          }
+        } else {
+          var linkCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '';
+          var names = checked.map(function(s) { return encodeURIComponent(s.name); }).join(',');
+          var qUrl = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + names + (linkCol ? '&link_col=' + encodeURIComponent(linkCol) : '');
+          var dbResp = await fetch(qUrl);
+          var dbData = await dbResp.json();
+          mergedRows = dbData.rows || [];
+          allHeaders = dbData.headers || [];
+        }
         hideAllPanels();
         queryContainer.classList.remove('hidden');
         queryContainer.dataset.mode = 'schema-extract';
