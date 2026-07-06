@@ -7701,6 +7701,8 @@ window._editorCollapseAll = function() {
     if (idCb) idCb.checked = false;
     var bareCb = document.getElementById('chainStripBareTrace');
     if (bareCb) bareCb.checked = false;
+    var randomCb = document.getElementById('chainStripRandomTrace');
+    if (randomCb) randomCb.checked = true;
   }
 
   /** 从方案列表提取数据: ci=0→webview, ci>=1→快照。返回 allResults，支持 signal 取消 */
@@ -8025,7 +8027,7 @@ window._editorCollapseAll = function() {
   }
   /** 溯源面板过滤选项 */
   function getTraceStripCheckboxes() {
-    return { id: document.getElementById('chainStripIdTrace'), bare: document.getElementById('chainStripBareTrace') };
+    return { id: document.getElementById('chainStripIdTrace'), bare: document.getElementById('chainStripBareTrace'), random: document.getElementById('chainStripRandomTrace') };
   }
   function applyTraceFilters(chain, type) {
     var cbs = getTraceStripCheckboxes();
@@ -8052,6 +8054,14 @@ window._editorCollapseAll = function() {
         var parts = chain.split('>').map(function(s) { return s.trim(); }).filter(Boolean);
         parts = parts.filter(function(s) { return s.indexOf('.') >= 0; });
         chain = parts.join(' > ');
+      }
+      if (cbs.random && cbs.random.checked) {
+        chain = chain.split('>').map(function(s) { return s.trim(); }).map(function(s) {
+          return s.replace(/\.[a-zA-Z_][\w-]*/g, function(m) {
+            // 保留有意义的类名，过滤 _ 开头(CSS Modules)和 sc- 开头(styled-components)
+            return /^\._|^\.sc-/.test(m) ? '' : m;
+          });
+        }).join(' > ');
       }
     }
     return chain.replace(/\s+/g, ' ').trim();
@@ -8161,8 +8171,7 @@ window._editorCollapseAll = function() {
           return s;
         } else {
           var s = info.t;
-          // 过滤 CSS-in-JS 随机类名：_开头(CSS Modules hash)、sc-开头(styled-components)
-          if (info.c && !/^_|^sc-/.test(info.c)) s += '.' + info.c;
+          if (info.c) s += '.' + info.c;
           if (info.i) s += '#' + info.i;
           return s;
         }
@@ -8194,6 +8203,7 @@ window._editorCollapseAll = function() {
       html += '<button id="btnApplyTrace" class="btn btn-sm btn-accent" style="height:26px">确认生成</button>';
       html += '<label class="checkbox-label"><input type="checkbox" id="chainStripIdTrace" onchange="updateTraceOverview();parseChainFromTrace()"> 过滤ID</label>';
       html += '<label class="checkbox-label"><input type="checkbox" id="chainStripBareTrace" onchange="updateTraceOverview();parseChainFromTrace()"> 过滤裸标签</label>';
+      html += '<label class="checkbox-label"><input type="checkbox" id="chainStripRandomTrace" checked onchange="updateTraceOverview();parseChainFromTrace()"> 过滤随机类名</label>';
       html += '</div></div>';
       chainTraceResult.innerHTML = html;
 
