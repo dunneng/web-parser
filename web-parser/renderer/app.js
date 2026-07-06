@@ -6765,22 +6765,24 @@ window._editorCollapseAll = function() {
     if (!schemaPreviewWrap) return;
     var rows = result.rows || [];
     var headers = result.headers || [];
+    // 过滤内部列
+    var allHeaders = headers.filter(function(h) { return h !== '来源URL' && h.charAt(0) !== '_'; });
     var limit = showAll ? rows.length : Math.min(rows.length, 5);
     var html = '<table class="schema-preview-table"><thead><tr><th style="width:30px">#</th>';
-    headers.forEach(function(h, hi) {
+    allHeaders.forEach(function(h, hi) {
       html += '<th draggable="true" data-col-idx="' + hi + '" class="draggable-col"><span class="col-grip">⠿</span> ' + escapeHtml(h) + '</th>';
     });
     html += '</tr></thead><tbody>';
     for (var r = 0; r < limit; r++) {
       html += '<tr><td style="color:var(--text-dim);font-size:11px">' + (r + 1) + '</td>';
-      headers.forEach(function(h) {
+      allHeaders.forEach(function(h) {
         var val = rows[r][h] || '';
         html += '<td' + (val === '' ? ' class="empty-cell"' : '') + '>' + escapeHtml(val.length > 80 ? val.substring(0, 80) + '...' : val) + '</td>';
       });
       html += '</tr>';
     }
     if (rows.length > limit) {
-      html += '<tr><td colspan="' + (headers.length + 1) + '" style="text-align:center;padding:6px"><button onclick="window._showAllPreviewRows()" style="font-size:11px;padding:2px 16px;border:1px solid var(--border);border-radius:3px;background:var(--bg-card);color:var(--accent);cursor:pointer;font-family:inherit">加载全部 ' + rows.length + ' 行</button></td></tr>';
+      html += '<tr><td colspan="' + (allHeaders.length + 1) + '" style="text-align:center;padding:6px"><button onclick="window._showAllPreviewRows()" style="font-size:11px;padding:2px 16px;border:1px solid var(--border);border-radius:3px;background:var(--bg-card);color:var(--accent);cursor:pointer;font-family:inherit">加载全部 ' + rows.length + ' 行</button></td></tr>';
     }
     html += '</tbody></table>';
     schemaPreviewWrap.innerHTML = html;
