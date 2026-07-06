@@ -2,6 +2,8 @@
 链路提取引擎
 从 HTML 中用 lxml 执行 walkUp 链路提取，用于解决虚拟列表 DOM 不完整的问题
 """
+import logging
+logger = logging.getLogger(__name__)
 from lxml import html, etree
 from .css_engine import get_child_text, get_direct_text, _truncate
 
@@ -59,6 +61,7 @@ def chain_extract(raw_html: str, chain_type: str, deepest_selector: str,
             targets = doc.xpath(deepest_selector)
         else:
             targets = doc.cssselect(deepest_selector)
+            logger.info(f"[链路] cssselect('{deepest_selector[:80]}') → {len(targets)} 个目标")
             if not targets:
                 # cssselect 返回空，尝试用转译的 XPath
                 from lxml.cssselect import CSSSelector

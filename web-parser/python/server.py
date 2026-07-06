@@ -511,9 +511,11 @@ async def extract_css(req: ParseRequest):
         raise HTTPException(400, "HTML 为空")
     if not req.query:
         raise HTTPException(400, "CSS 选择器为空")
-    return css_query(req.html, req.query, req.child_delim,
-                      max_text_len=req.max_text_len, max_results=req.max_results,
-                      expand_children=req.expand_children)
+    result = css_query(req.html, req.query, req.child_delim,
+                       max_text_len=req.max_text_len, max_results=req.max_results,
+                       expand_children=req.expand_children)
+    logger.info(f"[CSS] '{req.query[:80]}' → {result.get('count',0)} 条")
+    return result
 
 @app.post("/api/extract/regex")
 async def extract_regex(req: ParseRequest):
@@ -543,7 +545,9 @@ async def extract_chain(req: ChainRequest):
         raise HTTPException(400, "deepest_selector 为空")
     if not req.fields:
         raise HTTPException(400, "fields 为空")
-    return chain_extract(req.html, req.chain_type, req.deepest_selector, req.fields, req.child_delim)
+    result = chain_extract(req.html, req.chain_type, req.deepest_selector, req.fields, req.child_delim)
+    logger.info(f"[链路] 结果: {result.get('totalRows',0)} 行, targets={result.get('_debug',{}).get('target_count','?')}")
+    return result
 
 # ──────── Cookie 管理 ────────
 @app.get("/api/cookies/{domain}")
