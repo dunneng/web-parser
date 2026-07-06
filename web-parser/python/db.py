@@ -831,16 +831,24 @@ def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[
                 k = nr.get(next_link, "")
                 if k:
                     idx[k] = nr
+            # 同名列加序号避免覆盖（如"书名"→"书名_2"）
+            name_map = {}  # 原始列名 → 去重后的列名
             for h in next_headers:
-                if h != next_link:
-                    if h not in all_headers:
-                        all_headers.append(h)
+                if h == next_link:
+                    continue
+                target = h
+                n = 2
+                while target in all_headers or target in name_map.values():
+                    target = h + '_' + str(n)
+                    n += 1
+                name_map[h] = target
+                all_headers.append(target)
             for br in merged_rows:
                 key = br.get(step_link, "")
                 match = idx.get(key) if key else None
                 for h in next_headers:
                     if h != next_link:
-                        br[h] = match[h] if (match and h in match) else ""
+                        br[name_map[h]] = match[h] if (match and h in match) else ""
         return {"rows": merged_rows, "headers": all_headers, "totalRows": len(merged_rows)}
 
     # ── 垂直拼接（只有一个方案）──
