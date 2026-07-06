@@ -1316,7 +1316,7 @@ window.Parser = window.Parser || {};
         // 清理旧高亮浮层
         'var oldOv=document.querySelectorAll(".__parser_auto_overlay");for(var oo=0;oo<oldOv.length;oo++){var ov=oldOv[oo];if(ov.parentNode){var op=ov.getAttribute("data-ppos");if(op!==null)ov.parentNode.style.position=op;ov.parentNode.removeChild(ov);}}' +
         // highlightEl
-        'var _hlCount=0;function highlightEl(el,isTemplate){var ov=document.createElement("div");ov.className="__parser_auto_overlay";ov.setAttribute("data-parser-box","1");var tag=el.tagName.toUpperCase();var isVoid=tag==="IMG"||tag==="INPUT"||tag==="BR"||tag==="HR"||tag==="SOURCE"||tag==="EMBED"||tag==="AREA";var re=el.getBoundingClientRect();if(re.width===0&&re.height===0)return;' +
+        'var _hlCount=0;function highlightEl(el,isTemplate){var ov=document.createElement("div");ov.className="__parser_auto_overlay";ov.setAttribute("data-parser-box","1");var tag=el.tagName.toUpperCase();var isVoid=tag==="IMG"||tag==="INPUT"||tag==="BR"||tag==="HR"||tag==="SOURCE"||tag==="EMBED"||tag==="AREA";var re=el.getBoundingClientRect();if(re.width===0&&re.height===0)return;if(re.width<10&&re.height<10)return;' +
         'var borderColor=isTemplate?"#f59e0b":"#a78bfa";var bgColor=isTemplate?"rgba(245,158,11,0.22)":"rgba(167,139,250,0.18)";' +
         'if(isVoid){' +
           // void 元素：fixed 定位挂 body + scroll 跟随，和 drawBox 一致
