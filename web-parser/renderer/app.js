@@ -369,6 +369,9 @@ window._editorCollapseAll = function() {
     if (btnExportPicked) { btnExportPicked.disabled = true; btnExportPicked.textContent = '注册中...'; }
 
     var payload = [];
+    // 获取当前页面 URL
+    var pageUrl = '';
+    try { pageUrl = await document.getElementById('webview').executeJavaScript('window.location.href') || ''; } catch(e) {}
     for (var i = 0; i < unregistered.length; i++) {
       var item = unregistered[i];
       var ei = item.elementInfo || {};
@@ -389,7 +392,8 @@ window._editorCollapseAll = function() {
             className: cei.class || '',
             elementId: cei.id || '',
             href: cei.href || '',
-            src: cei.src || ''
+            src: cei.src || '',
+            page_url: pageUrl
           });
         }
         continue;
@@ -407,7 +411,8 @@ window._editorCollapseAll = function() {
         className: String(ei.class || ''),
         elementId: ei.id || '',
         href: ei.href || '',
-        src: ei.src || ''
+        src: ei.src || '',
+        page_url: pageUrl
       });
     }
 
@@ -432,7 +437,8 @@ window._editorCollapseAll = function() {
         className: String(am.class || ''),
         elementId: String(am.id || ''),
         href: am.href || '',
-        src: am.src || ''
+        src: am.src || '',
+        page_url: pageUrl
       });
     }
 
