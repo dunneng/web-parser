@@ -8024,6 +8024,7 @@ async function registerElements() {
           if (batchResp2.ok) {
             var batchData2 = (await batchResp2.json()).data;
             if (batchData2 && batchData2.rows && batchData2.rows.length > 0) {
+              // 合并列：同名填空，不同名追加
               (batchData2.headers || []).forEach(function(h) { if (allHeaders.indexOf(h) < 0) allHeaders.push(h); });
               if (batchData2.rows.length > mergedRows.length) {
                 for (var bj = mergedRows.length; bj < batchData2.rows.length; bj++) {
@@ -10443,7 +10444,7 @@ async function registerElements() {
                 var batchData = (await batchResp.json()).data;
                 _debugLog('[批量兜底] batchData=' + (batchData ? 'rows:'+batchData.rows.length : 'null'));
                 if (batchData && batchData.rows && batchData.rows.length > 0) {
-                  // 补列头：批量数据有的列加入 mergedHeaders
+                  // 合并列：批量列与链列同名则填空，不同名则追加
                   (batchData.headers || []).forEach(function(h) {
                     if (mergedHeaders.indexOf(h) < 0) mergedHeaders.push(h);
                   });
@@ -10457,7 +10458,7 @@ async function registerElements() {
                       mergedRows.push(padRow);
                     }
                   }
-                  // 链提取已有的行，空缺列从批量数据补
+                  // 链已有的行从批量数据补空缺列
                   for (var ri = 0; ri < Math.min(mergedRows.length, batchData.rows.length); ri++) {
                     (batchData.headers || []).forEach(function(h) {
                       if (!mergedRows[ri][h]) {
@@ -10465,6 +10466,34 @@ async function registerElements() {
                       }
                     });
                   }
+                  // 跨列合并：批量列值与链列值相同时合并到链列
+                  (batchData.headers || []).forEach(function(bh) {
+                    for (var chi = 0; chi < mergedHeaders.length; chi++) {
+                      var ch = mergedHeaders[chi];
+                      if (ch === bh) continue;
+                      // 检查两列是否有重叠值，有就合并
+                      var overlap = false;
+                      for (var ri4 = 0; ri4 < Math.min(mergedRows.length, batchData.rows.length); ri4++) {
+                        if (mergedRows[ri4][bh] && batchData.rows[ri4][bh] && mergedRows[ri4][bh] === batchData.rows[ri4][bh]) {
+                          overlap = true; break;
+                        }
+                      }
+                      if (overlap) {
+                        // 链列填空，批量列填链列空缺
+                        for (var ri5 = 0; ri5 < batchData.rows.length; ri5++) {
+                          if (ri5 < mergedRows.length && !mergedRows[ri5][bh]) {
+                            mergedRows[ri5][bh] = batchData.rows[ri5][bh] || '';
+                          }
+                        }
+                        // 从 headers 中去掉多余批量列
+                        var dupIdx = mergedHeaders.indexOf(bh);
+                        if (dupIdx >= 0) mergedHeaders.splice(dupIdx, 1);
+                        // 从 rows 中删掉该列
+                        mergedRows.forEach(function(r) { delete r[bh]; });
+                        break;
+                      }
+                    }
+                  });
                   result.totalRows = mergedRows.length;
                   result.headers = mergedHeaders;
                   result.rows = mergedRows;
