@@ -43,7 +43,7 @@ import db
 import product_pipeline
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
@@ -1986,4 +1986,4 @@ async def bg_demo_page():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=19527, log_level="info")
+    uvicorn.run(app, host="127.0.0.1", port=19527, log_level="warning")
