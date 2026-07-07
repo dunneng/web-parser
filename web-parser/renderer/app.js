@@ -347,7 +347,26 @@ window._editorCollapseAll = function() {
 
 
 
-  async function registerElements() {
+  
+  /** 从注册元素 selector 反推卡片容器选择器 */
+  function _deriveCardSelector(items) {
+    for (var i = 0; i < items.length; i++) {
+      var sel = (items[i].selector || '');
+      if (!sel) continue;
+      // 去掉 #item_id_xxx >
+      var cleaned = sel.replace(/#\w+\s*>\s*/, '');
+      // 取第一段（卡片容器）
+      var parts = cleaned.split('>');
+      if (parts.length > 0) {
+        var container = parts[0].trim();
+        // 确保是类名级（含 .）
+        if (container.indexOf('.') >= 0) return container;
+      }
+    }
+    return '';
+  }
+
+async function registerElements() {
     // 从 webview 读取自动匹配的元素
     var autoMatched = [];
     try {
@@ -470,50 +489,50 @@ window._editorCollapseAll = function() {
       var msg = '注册完成: 新增 ' + (result.registered || []).length + ' 个, 更新 ' + (result.updated || []).length + ' 个';
       if ((result.skipped || []).length > 0) msg += ', 跳过 ' + result.skipped.length + ' 个';
       setStatus(msg);
-      // 构建批量行数组：用 unregistered 做列，autoMatched 做行
-      _debugLog('[批量注册] autoMatched=' + autoMatched.length + ' unregistered=' + unregistered.length + ' pageUrl=' + (pageUrl||'').substring(0,80));
+      // 构建批量行数组：deepestSelector 命中卡片 → 逐容器 querySelector 注册元素
       try {
-        if (autoMatched.length > 0 && unregistered.length > 0) {
-          var colDefs2 = unregistered.map(function(item) {
-            var ei2 = item.elementInfo || {};
-            return { label: ei2.text || item.selector, selector: item.selector, css: ei2.css || '' };
-          });
-          var cols2 = colDefs2.map(function(cd) { return { label: cd.label, vals: [] }; });
-          autoMatched.forEach(function(am) {
-            for (var ci2 = 0; ci2 < colDefs2.length; ci2++) {
-              var cd2 = colDefs2[ci2];
-              var amSuffix = (am.css || '').replace(/#item_id_\d+\s*>\s*/, '');
-              var cdSuffix = (cd2.selector || cd2.css || '').replace(/#item_id_\d+\s*>\s*/, '');
-              if (amSuffix && cdSuffix && amSuffix === cdSuffix) {
-                cols2[ci2].vals.push(am.text || '');
-                break;
-              }
-            }
-          });
-          _debugLog('[批量注册] 各列行数: ' + JSON.stringify(cols2.map(function(c){return c.vals.length;})));
-          var maxRLen2 = 0;
-          cols2.forEach(function(c) { if (c.vals.length > maxRLen2) maxRLen2 = c.vals.length; });
-          var bRows2 = [];
-          for (var ri3 = 0; ri3 < maxRLen2; ri3++) {
-            var bRow2 = {};
-            cols2.forEach(function(c) { bRow2[c.label] = ri3 < c.vals.length ? c.vals[ri3] : ''; });
-            bRows2.push(bRow2);
-          }
-          var bHeaders2 = cols2.map(function(c) { return c.label; });
-          if (bRows2.length > 0) {
-            await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ page_url: pageUrl, headers: bHeaders2, rows: bRows2 })
+        var chainSel = schemaChainInput.value.trim() || _deriveCardSelector(unregistered);
+        if (chainSel && unregistered.length > 0) {
+          var wv2 = document.getElementById('webview');
+          if (wv2) {
+            // 列定义
+            var colItems = unregistered.map(function(item) {
+              var ei = item.elementInfo || {};
+              return { label: ei.text || item.selector, sel: item.selector };
             });
-            _debugLog('[批量注册] ' + bRows2.length + '行 x ' + bHeaders2.length + '列 → DB');
+            var selList = JSON.stringify(colItems.map(function(c) { return {label: c.label, sel: c.sel}; }));
+            var jsCode = '(function(){var items=' + selList + ';var deepSel=' + JSON.stringify(chainSel) + ';' +
+              'var containers=document.querySelectorAll(deepSel);' +
+              'var headers2=items.map(function(it){return it.label;});' +
+              'var rows2=[];' +
+              'for(var ci=0;ci<containers.length;ci++){' +
+                'var container=containers[ci];' +
+                'var row2={};' +
+                'for(var ii=0;ii<items.length;ii++){' +
+                  'try{var el=container.querySelector(items[ii].sel);row2[items[ii].label]=el?el.textContent.trim():"";}catch(e2){row2[items[ii].label]="";}' +
+                '}' +
+                'rows2.push(row2);' +
+              '}' +
+              'return JSON.stringify({headers:headers2,rows:rows2});' +
+            '})()';
+            var raw2 = await wv2.executeJavaScript(jsCode);
+            var data2 = JSON.parse(raw2 || '{"headers":[],"rows":[]}');
+            if (data2.rows && data2.rows.length > 0) {
+              await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ page_url: pageUrl, headers: data2.headers, rows: data2.rows })
+              });
+              _debugLog('[批量注册] ' + data2.rows.length + '行 x ' + data2.headers.length + '列 → DB');
+            } else {
+              _debugLog('[批量注册] 0行，deepestSelector 未命中');
+            }
           }
+        } else {
+          _debugLog('[批量注册] 跳过: chainSel=' + (chainSel || '').substring(0,40) + ' unreg=' + unregistered.length);
         }
-      } catch(e) {
-        _debugLog('[批量注册] 失败:', e.message);
+      } catch(e2) {
+        _debugLog('[批量注册] 失败: ' + e2.message);
       }
-
-      // 先展示已注册面板（更重要的反馈），编辑器渲染用 rAF 延迟避免同步阻塞
-      fetchRegisteredElements().then(function() { showRegisteredElementsPanel(); });
       requestAnimationFrame(function() {
         Parser.extractor.renderElementEditor();
         updatePickedTreeNodes();
