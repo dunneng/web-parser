@@ -7820,7 +7820,7 @@ window._editorCollapseAll = function() {
                       body: JSON.stringify({ html: snapHtml, query: elem.selector })
                     });
                     var cssData = await cssResp.json();
-                    var vals = (cssData.results || []).map(function(r2) { return r2.text || ''; });
+                    var vals = (cssData.results || []).map(function(r2) { return r2["文本"] || ''; });
                     var colName = elem.text || elem.selector;
                     if (pageResult.headers.indexOf(colName) < 0) pageResult.headers.push(colName);
                     for (var ri = 0; ri < pageResult.rows.length; ri++) {
@@ -10286,7 +10286,7 @@ window._editorCollapseAll = function() {
                         body: JSON.stringify({ html: snapHtml, query: elem2.selector })
                       });
                       var cd2 = await cr2.json();
-                      var vals2 = (cd2.results || []).map(function(r2) { return r2.text || ''; });
+                      var vals2 = (cd2.results || []).map(function(r2) { return r2["文本"] || ''; });
                       var cn2 = elem2.text || elem2.selector;
                       if (pageResult.headers.indexOf(cn2) < 0) pageResult.headers.push(cn2);
                       for (var mk = 0; mk < pageResult.rows.length; mk++) {
