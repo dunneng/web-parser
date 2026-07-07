@@ -8168,6 +8168,28 @@ async function registerElements() {
                 if (!dr[mi][h]) dr[mi][h] = bd.rows[mi][h] || '';
               });
             }
+            // 跨列合并
+            (bd.headers || []).forEach(function(bh3) {
+              for (var cj = 0; cj < dh.length; cj++) {
+                var ch3 = dh[cj];
+                if (ch3 === bh3) continue;
+                var ov3 = false;
+                for (var oi3 = 0; oi3 < Math.min(dr.length, bd.rows.length); oi3++) {
+                  if (dr[oi3][ch3] && bd.rows[oi3][bh3] && dr[oi3][ch3] === bd.rows[oi3][bh3]) {
+                    ov3 = true; break;
+                  }
+                }
+                if (ov3) {
+                  for (var fi3 = 0; fi3 < bd.rows.length; fi3++) {
+                    if (fi3 < dr.length && !dr[fi3][ch3]) dr[fi3][ch3] = bd.rows[fi3][bh3] || '';
+                  }
+                  var di3 = dh.indexOf(bh3);
+                  if (di3 >= 0) dh.splice(di3, 1);
+                  dr.forEach(function(r) { delete r[bh3]; });
+                  break;
+                }
+              }
+            });
             data.totalRows = dr.length;
           }
         }
