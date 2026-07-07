@@ -346,52 +346,6 @@ window._editorCollapseAll = function() {
 
 
 
-  /** 批量注册：deepestSelector 命中容器 → 逐容器 querySelector 注册元素 → 存行数组到 DB */
-  async function _batchRegisterElements(pageUrl) {
-    try {
-      var wv = document.getElementById('webview');
-      if (!wv) return;
-      // 取 deepestSelector
-      var chainInput = schemaChainInput.value.trim();
-      if (!chainInput) return;
-      // 取当前注册的元素（刚注册的这批 + 已有的）
-      var elResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements');
-      if (!elResp.ok) return;
-      var elData = await elResp.json();
-      var elems = (elData.elements || []).filter(function(e) { return e.page_url === pageUrl; });
-      if (elems.length === 0) return;
-      // 在 webview 中执行：deepestSelector 命中 → 每个容器内 querySelector 每个元素的 clean_selector
-      var selList = JSON.stringify(elems.map(function(e) { return {
-        label: e.text || e.selector,
-        sel: e.clean_selector || e.selector
-      }; }));
-      var jsCode = '(function(){var items=' + selList + ';var deepSel=' + JSON.stringify(chainInput) + ';' +
-        'var containers=document.querySelectorAll(deepSel);' +
-        'var headers=items.map(function(it){return it.label;});' +
-        'var rows=[];' +
-        'for(var ci=0;ci<containers.length;ci++){' +
-          'var container=containers[ci];' +
-          'var row={};' +
-          'for(var ii=0;ii<items.length;ii++){' +
-            'try{var el=container.querySelector(items[ii].sel);row[items[ii].label]=el?el.textContent.trim():"";}catch(e){row[items[ii].label]="";}' +
-          '}' +
-          'rows.push(row);' +
-        '}' +
-        'return JSON.stringify({headers:headers,rows:rows});' +
-      '})()';
-      var raw = await wv.executeJavaScript(jsCode);
-      var data = JSON.parse(raw || '{"headers":[],"rows":[]}');
-      if (!data.rows || data.rows.length === 0) return;
-      // 存到后端
-      await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ page_url: pageUrl, headers: data.headers, rows: data.rows })
-      });
-      console.log('[批量注册] ' + data.rows.length + '行 x ' + data.headers.length + '列 → DB');
-    } catch(e) {
-      console.log('[批量注册] 失败:', e.message);
-    }
-  }
 
   async function registerElements() {
     // 从 webview 读取自动匹配的元素
@@ -639,8 +593,52 @@ window._editorCollapseAll = function() {
     Parser.state.queryResults = rows;
     renderQueryTable(rows);
     setStatus('已注册元素: ' + Parser.state.registeredElements.length + ' 个');
-    // 批量注册：用 deepestSelector 命中所有卡片，逐行 querySelector 填值存 DB
-    _batchRegisterElements(pageUrl);
+  
+  // 构建批量行数组：用 unregistered 做列，autoMatched 做行
+  try {
+    if (autoMatched.length > 0 && unregistered.length > 0) {
+      // unregistered = 列定义（用户选的字段）
+      var colDefs = unregistered.map(function(item) {
+        var ei = item.elementInfo || {};
+        return { label: ei.text || item.selector, selector: item.selector, css: ei.css || '' };
+      });
+      // autoMatched = 每列在所有卡片上的实例，按 selector 后缀分组到列
+      var cols = colDefs.map(function(cd) { return { label: cd.label, vals: [] }; });
+      // 对每个 autoMatched，找它属于哪个列（匹配 selector 后缀）
+      autoMatched.forEach(function(am) {
+        for (var ci = 0; ci < colDefs.length; ci++) {
+          var cd = colDefs[ci];
+          // 匹配：autoMatched 的 css 去掉 item_id 前缀后与列的 selector 去掉 item_id 后相同
+          var amSuffix = (am.css || '').replace(/#item_id_\d+\s*>\s*/, '');
+          var cdSuffix = (cd.selector || cd.css || '').replace(/#item_id_\d+\s*>\s*/, '');
+          if (amSuffix && cdSuffix && amSuffix === cdSuffix) {
+            cols[ci].vals.push(am.text || '');
+            break;
+          }
+        }
+      });
+      // 找最大行数
+      var maxRLen = 0;
+      cols.forEach(function(c) { if (c.vals.length > maxRLen) maxRLen = c.vals.length; });
+      // 构建 rows
+      var bRows = [];
+      for (var ri2 = 0; ri2 < maxRLen; ri2++) {
+        var bRow = {};
+        cols.forEach(function(c) { bRow[c.label] = ri2 < c.vals.length ? c.vals[ri2] : ''; });
+        bRows.push(bRow);
+      }
+      var bHeaders = cols.map(function(c) { return c.label; });
+      if (bRows.length > 0) {
+        await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ page_url: pageUrl, headers: bHeaders, rows: bRows })
+        });
+        console.log('[批量注册] ' + bRows.length + '行 x ' + bHeaders.length + '列 → DB');
+      }
+    }
+  } catch(e) {
+    console.log('[批量注册] 失败:', e.message);
+  }
 
   }
 
