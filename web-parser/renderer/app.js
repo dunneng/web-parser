@@ -7888,37 +7888,7 @@ async function registerElements() {
             if (pageResult && !pageResult.error && pageResult.rows) {
               var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
               pageResult.rows.forEach(function(r) { r["来源URL"] = snap.url || ''; });
-              // 用注册元素补充字段
-              try {
-                var elResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements');
-                if (elResp.ok) {
-                  var elData = await elResp.json();
-                  var elems = (elData.elements || []).filter(function(e) {
-                    return e.page_url === snap.url;
-                  });
-                  for (var ei2 = 0; ei2 < elems.length; ei2++) {
-                    var elem = elems[ei2];
-                    var cssResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/css', {
-                      method: 'POST', headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ html: snapHtml, query: elem.clean_selector || elem.selector })
-                    });
-                    var cssData = await cssResp.json();
-                    var vals = (cssData.results || []).map(function(r2) { return r2["文本"] || ''; });
-                    var colName = elem.text || (function(s) {
-                      var cs = (elem.clean_selector || elem.selector);
-                      var segs = cs.split('>');
-                      return segs[segs.length-1].trim();
-                    })(elem.selector);
-                    if (pageResult.headers.indexOf(colName) < 0) pageResult.headers.push(colName);
-                    for (var ri = 0; ri < pageResult.rows.length; ri++) {
-                      // 快照优先：链提取已有值不动，注册补空洞
-                      if (!pageResult.rows[ri][colName]) {
-                        pageResult.rows[ri][colName] = (ri < vals.length ? vals[ri] : '');
-                      }
-                    }
-                  }
-                }
-              } catch(e) {}
+              // 元素补充已移除——由批量兜底统一处理
               result.rows = result.rows.concat(pageResult.rows);
               result.totalRows += pageResult.totalRows || pageResult.rows.length;
               if (!result.headers.length && pageResult.headers.length) result.headers = pageResult.headers;
@@ -8023,18 +7993,34 @@ async function registerElements() {
           if (batchResp2.ok) {
             var batchData2 = (await batchResp2.json()).data;
             if (batchData2 && batchData2.rows && batchData2.rows.length > 0) {
-              // 批量只填空洞
-              var bc2 = (batchData2.headers || [])[0];
-              var cc2 = allHeaders.filter(function(h) { return h !== '来源URL' && h.charAt(0) !== '_'; })[0];
+              // 合并列：同名填空，不同名追加
+              (batchData2.headers || []).forEach(function(h) { if (allHeaders.indexOf(h) < 0) allHeaders.push(h); });
               if (batchData2.rows.length > mergedRows.length) {
                 for (var bj = mergedRows.length; bj < batchData2.rows.length; bj++) {
-                  var pRow = {}; pRow[cc2] = batchData2.rows[bj][bc2] || '';
+                  var pRow = {};
+                  (batchData2.headers || []).forEach(function(h) { pRow[h] = batchData2.rows[bj][h] || ''; });
                   mergedRows.push(pRow);
                 }
               }
               for (var rk = 0; rk < Math.min(mergedRows.length, batchData2.rows.length); rk++) {
-                if (!mergedRows[rk][cc2]) mergedRows[rk][cc2] = batchData2.rows[rk][bc2] || '';
+                (batchData2.headers || []).forEach(function(h) {
+                  if (!mergedRows[rk][h]) mergedRows[rk][h] = batchData2.rows[rk][h] || '';
+                });
               }
+                                    // 跨列合并：链列和批量列各只有1列时自动合并
+                  var nBatchCols = (batchData.headers || []).filter(function(h) { return mergedHeaders.indexOf(h) >= 0; }).length;
+                  var nChainCols = mergedHeaders.length - nBatchCols;
+                  if (nChainCols === 1 && nBatchCols === 1) {
+                    var chCol = mergedHeaders.filter(function(h) { return (batchData.headers || []).indexOf(h) < 0; })[0];
+                    var bhCol = (batchData.headers || []).filter(function(h) { return mergedHeaders.indexOf(h) >= 0; })[0];
+                    if (chCol && bhCol) {
+                      for (var mi = 0; mi < batchData.rows.length; mi++) {
+                        if (mi < mergedRows.length && !mergedRows[mi][chCol]) mergedRows[mi][chCol] = batchData.rows[mi][bhCol] || '';
+                      }
+                      mergedHeaders.splice(mergedHeaders.indexOf(bhCol), 1);
+                      mergedRows.forEach(function(r) { delete r[bhCol]; });
+                    }
+                  }
                   data.totalRows = mergedRows.length;
               data.headers = allHeaders;
               data.rows = mergedRows;
@@ -8126,17 +8112,35 @@ async function registerElements() {
           var bd = (await br.json()).data;
           if (bd && bd.rows && bd.rows.length > 0) {
             var dh = data.headers || [], dr = data.rows || [];
-            // 批量只填空洞
-            var bc3 = (bd.headers || [])[0];
-            var cc3 = dh.filter(function(h) { return h !== '来源URL' && h.charAt(0) !== '_'; })[0];
+            // 补列头
+            (bd.headers || []).forEach(function(h) { if (dh.indexOf(h) < 0) dh.push(h); });
+            // 补行
             if (bd.rows.length > dr.length) {
               for (var pi = dr.length; pi < bd.rows.length; pi++) {
-                var pr2 = {}; pr2[cc3] = bd.rows[pi][bc3] || '';
+                var pr2 = {};
+                (bd.headers || []).forEach(function(h) { pr2[h] = bd.rows[pi][h] || ''; });
                 dr.push(pr2);
               }
             }
+            // 填空列
             for (var mi = 0; mi < Math.min(dr.length, bd.rows.length); mi++) {
-              if (!dr[mi][cc3]) dr[mi][cc3] = bd.rows[mi][bc3] || '';
+              (bd.headers || []).forEach(function(h) {
+                if (!dr[mi][h]) dr[mi][h] = bd.rows[mi][h] || '';
+              });
+            }
+            // 跨列合并：批量列直接填进第一个非meta数据列
+            var bHdr = (bd.headers || [])[0];
+            var cHdr = dh.filter(function(h) { return h !== '来源URL' && h.charAt(0) !== '_' && h !== bHdr; })[0];
+            _debugLog('[跨列合并] bHdr=' + (bHdr||'') + ' cHdr=' + (cHdr||'') + ' dhLen=' + dh.length + ' drLen=' + dr.length);
+            if (bHdr && cHdr) {
+              _debugLog('[跨列合并] 填充中... bdRows=' + bd.rows.length);
+              for (var mi3 = 0; mi3 < bd.rows.length; mi3++) {
+                if (mi3 < dr.length && !dr[mi3][cHdr]) dr[mi3][cHdr] = bd.rows[mi3][bHdr] || '';
+              }
+              var di3 = dh.indexOf(bHdr);
+              if (di3 >= 0) dh.splice(di3, 1);
+              dr.forEach(function(r) { delete r[bHdr]; });
+              _debugLog('[跨列合并] 完成 dhLen=' + dh.length);
             }
             data.totalRows = dr.length;
           }
@@ -9460,14 +9464,12 @@ async function registerElements() {
           handleCustomAttr(this, function(val) {
             ext.attr = val;
             autoRefreshChainPreview();
-            renderChainTree();
-          });
+              });
         } else {
           this._prevValue = this.value;
           ext.attr = this.value;
           autoRefreshChainPreview();
-          renderChainTree();
-        }
+          }
       });
     });
     section.querySelectorAll('.chain-extr-name-input').forEach(function(inp) {
@@ -9477,8 +9479,7 @@ async function registerElements() {
         if (node && node.extractions && node.extractions[extrIdx]) {
           node.extractions[extrIdx].name = this.value.trim();
           autoRefreshChainPreview();
-          renderChainTree();
-        }
+          }
       });
     });
     section.querySelectorAll('.btn-extr-add').forEach(function(btn) {
@@ -9500,7 +9501,6 @@ async function registerElements() {
         var node = getChainNode(path);
         if (node && node.extractions) node.extractions.splice(extrIdx, 1);
         renderChainEditor(path);
-        renderChainTree();
         autoRefreshChainPreview();
       });
     });
@@ -9930,7 +9930,7 @@ async function registerElements() {
                   return baseSel + ':nth-child(' + (parseInt(k) + 1) + ')';
                 });
                 node.extractions.push({ attr: '$childText', name: fieldName, childSelectors: childSels, childDelimiter: delim });
-                renderChainTree();
+// renderChainTree();
                 renderChainEditor(path);
                 autoRefreshChainPreview();
               });
@@ -9957,7 +9957,7 @@ async function registerElements() {
                   });
                   var parentKey = JSON.stringify(path);
                   _expandedChains[parentKey] = true;
-                  renderChainTree();
+// renderChainTree();
                   renderChainEditor(path);
                   autoRefreshChainPreview();
                 });
@@ -10482,6 +10482,7 @@ async function registerElements() {
                   // 批量只填空洞：取第一个链列+批量列，补行填空
                   var bCol = (batchData.headers || [])[0];
                   var cCol = mergedHeaders.filter(function(h) { return h !== '来源URL' && h.charAt(0) !== '_'; })[0];
+                  // 补行：链提取行数 < 批量行数时，从批量数据追加行
                   if (batchData.rows.length > mergedRows.length) {
                     for (var bi = mergedRows.length; bi < batchData.rows.length; bi++) {
                       var padRow = {}; padRow[cCol] = batchData.rows[bi][bCol] || '';
@@ -10490,6 +10491,20 @@ async function registerElements() {
                   }
                   for (var ri = 0; ri < Math.min(mergedRows.length, batchData.rows.length); ri++) {
                     if (!mergedRows[ri][cCol]) mergedRows[ri][cCol] = batchData.rows[ri][bCol] || '';
+                  }
+                                    // 跨列合并：链列和批量列各只有1列时自动合并
+                  var nBatchCols = (batchData.headers || []).filter(function(h) { return mergedHeaders.indexOf(h) >= 0; }).length;
+                  var nChainCols = mergedHeaders.length - nBatchCols;
+                  if (nChainCols === 1 && nBatchCols === 1) {
+                    var chCol = mergedHeaders.filter(function(h) { return (batchData.headers || []).indexOf(h) < 0; })[0];
+                    var bhCol = (batchData.headers || []).filter(function(h) { return mergedHeaders.indexOf(h) >= 0; })[0];
+                    if (chCol && bhCol) {
+                      for (var mi = 0; mi < batchData.rows.length; mi++) {
+                        if (mi < mergedRows.length && !mergedRows[mi][chCol]) mergedRows[mi][chCol] = batchData.rows[mi][bhCol] || '';
+                      }
+                      mergedHeaders.splice(mergedHeaders.indexOf(bhCol), 1);
+                      mergedRows.forEach(function(r) { delete r[bhCol]; });
+                    }
                   }
                   result.totalRows = mergedRows.length;
                   result.headers = mergedHeaders;
