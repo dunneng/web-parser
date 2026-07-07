@@ -345,26 +345,6 @@ window._editorCollapseAll = function() {
   var _registeredElementsCache = null;
 
 
-  /** 清洗选择器：去ID/裸标签/随机类名，保留跨页通用的类名路径 */
-  function _cleanSelector(sel) {
-    if (!sel) return '';
-    var s = sel;
-    // 过滤ID
-    s = s.replace(/#[a-zA-Z][\w-]*/g, '');
-    // 过滤伪类
-    s = s.replace(/:(nth-of-type|nth-child|first-of-type|last-of-type|only-of-type|first-child|last-child|only-child)(\(\d+\))?/gi, '');
-    // 过滤裸标签：只保留含类名的段
-    var parts = s.split('>').map(function(p) { return p.trim(); }).filter(Boolean);
-    parts = parts.filter(function(p) { return p.indexOf('.') >= 0; });
-    // 过滤随机类名（_ 开头 / sc- 开头）
-    parts = parts.map(function(p) {
-      return p.replace(/\.[a-zA-Z_][\w-]*/g, function(m) {
-        return /^\._|^\.sc-/.test(m) ? '' : m;
-      });
-    });
-    return parts.join(' > ').replace(/\s+/g, ' ').trim();
-  }
-
   async function registerElements() {
     // 从 webview 读取自动匹配的元素
     var autoMatched = [];
@@ -415,7 +395,7 @@ window._editorCollapseAll = function() {
             href: cei.href || '',
             src: cei.src || '',
             page_url: pageUrl,
-            clean_selector: _cleanSelector(child.selector || '')
+            clean_selector: applyTraceFilters(child.selector || '', 'css')
           });
         }
         continue;
@@ -435,7 +415,7 @@ window._editorCollapseAll = function() {
         href: ei.href || '',
         src: ei.src || '',
         page_url: pageUrl,
-        clean_selector: _cleanSelector(item.selector || ei.css || '')
+        clean_selector: applyTraceFilters(item.selector || ei.css || '', 'css')
       });
     }
 
@@ -462,7 +442,7 @@ window._editorCollapseAll = function() {
         href: am.href || '',
         src: am.src || '',
         page_url: pageUrl,
-        clean_selector: _cleanSelector(am.css || '')
+        clean_selector: applyTraceFilters(am.css || '', 'css')
       });
     }
 
