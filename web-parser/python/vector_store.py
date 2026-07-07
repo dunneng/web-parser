@@ -7,6 +7,9 @@ import os
 import shutil
 import time
 from pathlib import Path
+import warnings
+warnings.filterwarnings("ignore", message="Payload indexes have no effect")
+
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
