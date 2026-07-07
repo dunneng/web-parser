@@ -532,17 +532,16 @@ async function registerElements() {
               '}' +
               'return JSON.stringify({headers:headers2,rows:rows2});' +
             '})()';
-            var raw2 = await wv2.executeJavaScript(jsCode);
-            var data2 = JSON.parse(raw2 || '{"headers":[],"rows":[]}');
-            if (data2.rows && data2.rows.length > 0) {
-              await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ page_url: pageUrl, headers: data2.headers, rows: data2.rows })
-              });
-              _debugLog('[批量注册] ' + data2.rows.length + '行 x ' + data2.headers.length + '列 → DB');
-            } else {
-              _debugLog('[批量注册] 0行，deepestSelector 未命中');
-            }
+            wv2.executeJavaScript(jsCode).then(function(raw2) {
+              var data2 = JSON.parse(raw2 || '{"headers":[],"rows":[]}');
+              if (data2.rows && data2.rows.length > 0) {
+                fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ page_url: pageUrl, headers: data2.headers, rows: data2.rows })
+                });
+                _debugLog('[批量注册] ' + data2.rows.length + '行 x ' + data2.headers.length + '列 -> DB');
+              }
+            }).catch(function(){});
           }
         } else {
           _debugLog('[批量注册] 跳过: chainSel=' + (chainSel || '').substring(0,40) + ' unreg=' + unregistered.length);
