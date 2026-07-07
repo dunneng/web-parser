@@ -8133,9 +8133,17 @@ async function registerElements() {
 
     // 批量注册兜底
     try {
-      var refUrl = '';
-      if (checked.length > 0 && checked[0].schema && checked[0].schema._listPageUrl) {
-        refUrl = checked[0].schema._listPageUrl;
+      var refUrl = (checked.length > 0 && checked[0].schema && checked[0].schema._listPageUrl) || '';
+      // 回退：从快照列表取第一页 URL
+      if (!refUrl) {
+        try {
+          var slR = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list');
+          if (slR.ok) {
+            var slD = await slR.json();
+            var snaps2 = slD.snapshots || [];
+            if (snaps2.length > 0) refUrl = snaps2[0].url;
+          }
+        } catch(e2) {}
       }
       if (refUrl) {
         var br = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch?url=' + encodeURIComponent(refUrl));
