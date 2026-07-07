@@ -846,6 +846,10 @@ def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[
                 return h
         return ""
 
+    if len(scheme_results) == 1:
+        name, rows, headers = scheme_results[0]
+        return {"rows": rows, "headers": headers, "totalRows": len(rows)}
+
     if len(scheme_results) >= 2:
         # ── 逐级横向合并：每步从上一个方案的 headers 中自动检测链接列 ──
         base_name, base_rows, base_headers = scheme_results[0]
