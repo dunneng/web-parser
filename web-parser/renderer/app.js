@@ -10393,8 +10393,8 @@ async function registerElements() {
                 var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
                 pageResult.rows.forEach(function(r) { r["来源URL"] = snap.url || ''; });
                 // 不推入 headers
-                // 用注册元素补充字段（平权：链提取 + 注册元素同时显示）
-                try {
+                // 元素补充已由批量数据兜底替代
+                /* try {
                   var elResp2 = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements');
                   if (elResp2.ok) {
                     var elData2 = await elResp2.json();
@@ -10421,7 +10421,7 @@ async function registerElements() {
                       }
                     }
                   }
-                } catch(e) {}
+                } catch(e) {} */
                 mergedRows = mergedRows.concat(pageResult.rows);
                 if (!mergedHeaders.length && pageResult.headers) mergedHeaders = pageResult.headers;
                 if (pageResult.counts) mergedCounts = pageResult.counts;
