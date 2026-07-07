@@ -8162,14 +8162,16 @@ async function registerElements() {
             // 跨列合并：批量列直接填进第一个非meta数据列
             var bHdr = (bd.headers || [])[0];
             var cHdr = dh.filter(function(h) { return h !== '来源URL' && h.charAt(0) !== '_' && h !== bHdr; })[0];
-            _debugLog('[跨列合并] bHdr=' + (bHdr||'') + ' cHdr=' + (cHdr||''));
+            _debugLog('[跨列合并] bHdr=' + (bHdr||'') + ' cHdr=' + (cHdr||'') + ' dhLen=' + dh.length + ' drLen=' + dr.length);
             if (bHdr && cHdr) {
+              _debugLog('[跨列合并] 填充中... bdRows=' + bd.rows.length);
               for (var mi3 = 0; mi3 < bd.rows.length; mi3++) {
                 if (mi3 < dr.length && !dr[mi3][cHdr]) dr[mi3][cHdr] = bd.rows[mi3][bHdr] || '';
               }
               var di3 = dh.indexOf(bHdr);
               if (di3 >= 0) dh.splice(di3, 1);
               dr.forEach(function(r) { delete r[bHdr]; });
+              _debugLog('[跨列合并] 完成 dhLen=' + dh.length);
             }
             data.totalRows = dr.length;
           }
