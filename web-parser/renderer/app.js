@@ -8038,6 +8038,28 @@ async function registerElements() {
                   if (!mergedRows[rk][h]) mergedRows[rk][h] = batchData2.rows[rk][h] || '';
                 });
               }
+              // 跨列合并
+              (batchData2.headers || []).forEach(function(bh2) {
+                for (var ci3 = 0; ci3 < allHeaders.length; ci3++) {
+                  var ch2 = allHeaders[ci3];
+                  if (ch2 === bh2) continue;
+                  var ov = false;
+                  for (var oi = 0; oi < Math.min(mergedRows.length, batchData2.rows.length); oi++) {
+                    if (mergedRows[oi][bh2] && batchData2.rows[oi][bh2] && mergedRows[oi][bh2] === batchData2.rows[oi][bh2]) {
+                      ov = true; break;
+                    }
+                  }
+                  if (ov) {
+                    for (var fi = 0; fi < batchData2.rows.length; fi++) {
+                      if (fi < mergedRows.length && !mergedRows[fi][bh2]) mergedRows[fi][bh2] = batchData2.rows[fi][bh2] || '';
+                    }
+                    var di = allHeaders.indexOf(bh2);
+                    if (di >= 0) allHeaders.splice(di, 1);
+                    mergedRows.forEach(function(r) { delete r[bh2]; });
+                    break;
+                  }
+                }
+              });
               data.totalRows = mergedRows.length;
               data.headers = allHeaders;
               data.rows = mergedRows;
@@ -8108,6 +8130,40 @@ async function registerElements() {
         return;
       }
     }
+
+    // 批量注册兜底
+    try {
+      var refUrl = '';
+      if (checked.length > 0 && checked[0].schema && checked[0].schema._listPageUrl) {
+        refUrl = checked[0].schema._listPageUrl;
+      }
+      if (refUrl) {
+        var br = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch?url=' + encodeURIComponent(refUrl));
+        if (br.ok) {
+          var bd = (await br.json()).data;
+          if (bd && bd.rows && bd.rows.length > 0) {
+            var dh = data.headers || [], dr = data.rows || [];
+            // 补列头
+            (bd.headers || []).forEach(function(h) { if (dh.indexOf(h) < 0) dh.push(h); });
+            // 补行
+            if (bd.rows.length > dr.length) {
+              for (var pi = dr.length; pi < bd.rows.length; pi++) {
+                var pr2 = {};
+                (bd.headers || []).forEach(function(h) { pr2[h] = bd.rows[pi][h] || ''; });
+                dr.push(pr2);
+              }
+            }
+            // 填空列
+            for (var mi = 0; mi < Math.min(dr.length, bd.rows.length); mi++) {
+              (bd.headers || []).forEach(function(h) {
+                if (!dr[mi][h]) dr[mi][h] = bd.rows[mi][h] || '';
+              });
+            }
+            data.totalRows = dr.length;
+          }
+        }
+      }
+    } catch(e) {}
 
     if (!data.rows || data.rows.length === 0) {
       previewWrap.innerHTML = '<div class="tree-empty">该方案暂无数据</div>';
