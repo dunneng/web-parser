@@ -66,15 +66,6 @@ def init_db():
                 updated_at  TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_elements_dedup ON elements(dedup_key);
-        # 迁移：旧表无 snapshot_id 列，重建
-        try:
-            cur = conn.execute("PRAGMA table_info(element_batches)")
-            cols = [c[1] for c in cur.fetchall()]
-            if 'snapshot_id' not in cols:
-                conn.execute("DROP TABLE IF EXISTS element_batches")
-        except Exception:
-            pass
-
             CREATE TABLE IF NOT EXISTS element_batches (
                 page_url    TEXT NOT NULL,
                 data_json   TEXT NOT NULL,
@@ -82,6 +73,7 @@ def init_db():
                 updated_at  TEXT NOT NULL,
                 snapshot_id INTEGER NOT NULL DEFAULT 0
             );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_element_batches_snap ON element_batches(snapshot_id);
 
             CREATE TABLE IF NOT EXISTS collected (
                 collect_id  TEXT NOT NULL,
@@ -166,6 +158,17 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_skus_size ON product_skus(size);
         """)
         conn.commit()
+        # 迁移：旧表无 snapshot_id 列，重建
+        try:
+            cur = conn.execute("PRAGMA table_info(element_batches)")
+            cols = [c[1] for c in cur.fetchall()]
+            if 'snapshot_id' not in cols:
+                conn.execute("DROP TABLE IF EXISTS element_batches")
+                conn.execute("CREATE TABLE IF NOT EXISTS element_batches (page_url TEXT NOT NULL, data_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, snapshot_id INTEGER NOT NULL DEFAULT 0)")
+                conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_element_batches_snap ON element_batches(snapshot_id)")
+        except Exception:
+            pass
+
 
         # 迁移：为旧数据库添加 description 列
         try:
