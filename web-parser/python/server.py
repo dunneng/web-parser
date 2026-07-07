@@ -943,6 +943,36 @@ class ChainDataSaveRequest(BaseModel):
     rows: list[dict]
     headers: list[str]
 
+
+# ── 方案存储 ──
+
+@app.post("/api/schemes")
+async def save_scheme(data: dict):
+    """保存/更新方案"""
+    name = data.get("name", "")
+    schema = data.get("schema", {})
+    if not name:
+        raise HTTPException(400, "name required")
+    return db.save_scheme(name, schema)
+
+@app.get("/api/schemes/{name}")
+async def load_scheme(name: str):
+    """加载方案"""
+    result = db.load_scheme(name)
+    if result is None:
+        raise HTTPException(404, "scheme not found")
+    return result
+
+@app.delete("/api/schemes/{name}")
+async def delete_scheme(name: str):
+    """删除方案"""
+    return db.delete_scheme(name)
+
+@app.get("/api/schemes")
+async def list_schemes():
+    """列出所有方案名"""
+    return {"names": db.list_schemes()}
+
 @app.post("/api/chain-data/save")
 async def save_chain_data(req: ChainDataSaveRequest):
     logger.info(f"[保存] scheme={req.scheme_name} headers={req.headers} rows={len(req.rows)}")

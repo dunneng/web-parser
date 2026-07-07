@@ -75,6 +75,13 @@ def init_db():
             );
             CREATE UNIQUE INDEX IF NOT EXISTS idx_element_batches_snap ON element_batches(snapshot_id);
 
+            CREATE TABLE IF NOT EXISTS chain_schemes (
+                name        TEXT PRIMARY KEY,
+                data_json   TEXT NOT NULL,
+                created_at  TEXT NOT NULL,
+                updated_at  TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS collected (
                 collect_id  TEXT NOT NULL,
                 row_index   INTEGER NOT NULL,
@@ -824,6 +831,42 @@ def save_chain_data(scheme_name: str, rows: list[dict], headers: list[str]) -> d
                        (scheme_name, data_json, now, now))
     return {"ok": True, "scheme_name": scheme_name, "rows": len(rows)}
 
+
+
+# ── 方案存储 ──
+
+def save_scheme(name: str, data: dict) -> dict:
+    """保存/更新方案"""
+    import json as _json
+    now = _now_iso()
+    data_json = _json.dumps(data, ensure_ascii=False)
+    with get_db() as db:
+        db.execute(
+            "INSERT INTO chain_schemes (name, data_json, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(name) DO UPDATE SET data_json=excluded.data_json, updated_at=excluded.updated_at",
+            (name, data_json, now, now),
+        )
+    return {"ok": True}
+
+def load_scheme(name: str) -> dict | None:
+    """加载方案"""
+    import json as _json
+    with get_db() as db:
+        r = db.execute("SELECT data_json FROM chain_schemes WHERE name=?", (name,)).fetchone()
+        if r:
+            return _json.loads(r["data_json"])
+    return None
+
+def delete_scheme(name: str) -> dict:
+    """删除方案"""
+    with get_db() as db:
+        db.execute("DELETE FROM chain_schemes WHERE name=?", (name,))
+    return {"ok": True}
+
+def list_schemes() -> list[dict]:
+    """列出所有方案名"""
+    with get_db() as db:
+        rows = db.execute("SELECT name FROM chain_schemes ORDER BY updated_at DESC").fetchall()
+    return [r["name"] for r in rows]
 
 def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[str] = None) -> dict:
     """查询一个或多个方案的数据。

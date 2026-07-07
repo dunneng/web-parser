@@ -6463,21 +6463,27 @@ async function registerElements() {
     return null;
   }
 
-  /** 保存当前方案到 localStorage */
-  function saveSchemaToStorage(name, schema) {
+  /** 保存方案到后端 */
+  async function saveSchemaToStorage(name, schema) {
     try {
-      localStorage.setItem(getSchemaStorageKey(name), JSON.stringify(schema));
+      var resp = await fetch('/api/schemes', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name: name, schema: schema })
+      });
+      if (!resp.ok) return false;
       return true;
     } catch (e) { return false; }
   }
 
-  /** 删除一个命名方案 */
-  function deleteSchemaFromStorage(name) {
-    localStorage.removeItem(getSchemaStorageKey(name));
+  /** 删除方案 */
+  async function deleteSchemaFromStorage(name) {
+    try {
+      await fetch('/api/schemes/' + encodeURIComponent(name), { method: 'DELETE' });
+    } catch (e) {}
   }
 
   /** 刷新方案下拉列表（自定义多选） */
-  function refreshSchemaList() {
+  async function refreshSchemaList() {
     if (!manualSchemeTriggerText || !manualSchemeOptions) return;
     var names = getSavedSchemaNames();
     if (!Parser.state.manualSchemes) Parser.state.manualSchemes = [];
@@ -6516,12 +6522,12 @@ async function registerElements() {
     });
     // 点击方案名 → 加载到编辑器
     manualSchemeOptions.querySelectorAll('span[data-idx]').forEach(function(sp) {
-      sp.addEventListener('click', function(e) {
+      sp.addEventListener('click', async function(e) {
         e.stopPropagation();
         var idx = parseInt(this.dataset.idx);
         var s = Parser.state.manualSchemes[idx];
         if (!s) return;
-        var schema = loadSchemaFromStorage(s.name);
+        var schema = await loadSchemaFromStorage(s.name);
         if (schema) {
           applySchemaToUI(schema);
           Parser.state.schemaPreviewData = null;
@@ -6537,7 +6543,7 @@ async function registerElements() {
         var idx = parseInt(this.dataset.idx);
         var s = Parser.state.manualSchemes[idx];
         if (!s) return;
-        deleteSchemaFromStorage(s.name);
+        deleteSchemaFromStorage(s.name).catch(function(){});  
         if (Parser.state._editingManualSchemeName === s.name) Parser.state._editingManualSchemeName = null;
         Parser.state.manualSchemes.splice(idx, 1);
         refreshSchemaList();
@@ -10654,7 +10660,7 @@ async function registerElements() {
   }
 
   /** 保存当前方案 */
-  function handleSaveSchema() {
+  async function handleSaveSchema() {
     syncFieldsFromUI();
     var name = schemaName.value.trim();
     if (!name) {
@@ -10669,7 +10675,7 @@ async function registerElements() {
       setStatus('请至少填入一个选择器');
       return;
     }
-    if (saveSchemaToStorage(name, schema)) {
+    if (await saveSchemaToStorage(name, schema)) {
       Parser.state.schemaCurrentName = name;
       refreshSchemaList();
       setStatus('方案已保存: ' + name);
@@ -10814,20 +10820,19 @@ async function registerElements() {
           // 没在编辑也没输入名字 → 不保存，直接用当前 schema 查询
         } else {
           if (!Parser.state.schemaCurrentName) {
-            if (loadSchemaFromStorage(name)) {
+            if (await loadSchemaFromStorage(name)) {
               setStatus('方案名「' + name + '」已存在，请换一个名字');
               return;
             }
           }
           if (Parser.state.schemaCurrentName && Parser.state.schemaCurrentName !== name) {
-            if (loadSchemaFromStorage(name)) {
+            if (await loadSchemaFromStorage(name)) {
               setStatus('方案名「' + name + '」已存在，请换一个名字');
               return;
             }
-            deleteSchemaFromStorage(Parser.state.schemaCurrentName);
+            await deleteSchemaFromStorage(Parser.state.schemaCurrentName);
           }
-          saveSchemaToStorage(name, schema);
-          refreshSchemaList();
+          saveSchemaToStorage(name, schema).then(function(){ refreshSchemaList(); }).catch(function(){});
           Parser.state.schemaCurrentName = name;
           setStatus('已保存: ' + name);
         }
@@ -10853,10 +10858,11 @@ async function registerElements() {
           // 手动模式：有勾选方案 → 合并提取；无勾选 → 用当前编辑器 schema
           var manualChecked = (Parser.state.manualSchemes || []).filter(function(s) { return s.checked; });
           if (manualChecked.length > 0) {
-            checked = manualChecked.map(function(s) {
-              var sch = loadSchemaFromStorage(s.name);
+            var schResults = await Promise.all(manualChecked.map(async function(s) {
+              var sch = await loadSchemaFromStorage(s.name);
               return sch ? { name: s.name, schema: sch } : null;
-            }).filter(Boolean);
+            }));
+            checked = schResults.filter(Boolean);
           } else {
             checked = [{ name: name, schema: schema }];
           }
@@ -11203,8 +11209,7 @@ async function registerElements() {
           syncFieldsFromUI();
           var schema = buildSchemaFromUI();
           schema.name = name;
-          saveSchemaToStorage(name, schema);
-          refreshSchemaList();
+          saveSchemaToStorage(name, schema).then(function(){ refreshSchemaList(); }).catch(function(){});
           // 记住，后续「保存方案」更新它
           Parser.state.schemaCurrentName = name;
         }
