@@ -496,9 +496,24 @@ async function registerElements() {
           var wv2 = document.getElementById('webview');
           if (wv2) {
             // 列定义
+            // 列定义：label 用文本或 selector，sel 用容器内相对路径
+            var cardSel = chainSel;
             var colItems = unregistered.map(function(item) {
               var ei = item.elementInfo || {};
-              return { label: ei.text || item.selector, sel: item.selector };
+              var fullSel = item.selector || '';
+              // 去掉 #item_id_xxx > 前缀
+              var relSel = fullSel.replace(/#\w+\s*>\s*/, '');
+              // 如果 cardSel 不为空，去掉卡片容器前缀
+              if (cardSel && relSel.indexOf(cardSel) === 0) {
+                relSel = relSel.substring(cardSel.length).replace(/^\s*>\s*/, '');
+              }
+              // label: 优先文本，其次 selector 最后一节
+              var lbl = ei.text || '';
+              if (!lbl) {
+                var segs = fullSel.split('>');
+                lbl = segs[segs.length-1].trim();
+              }
+              return { label: lbl, sel: relSel || fullSel };
             });
             var selList = JSON.stringify(colItems.map(function(c) { return {label: c.label, sel: c.sel}; }));
             var jsCode = '(function(){var items=' + selList + ';var deepSel=' + JSON.stringify(chainSel) + ';' +
