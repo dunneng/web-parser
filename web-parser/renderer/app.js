@@ -10288,7 +10288,7 @@ window._editorCollapseAll = function() {
                       var cd2 = await cr2.json();
                       var vals2 = (cd2.results || []).map(function(r2) { return r2.text || ''; });
                       var cn2 = elem2.text || elem2.selector;
-                      if (mergedHeaders.indexOf(cn2) < 0) mergedHeaders.push(cn2);
+                      if (pageResult.headers.indexOf(cn2) < 0) pageResult.headers.push(cn2);
                       for (var mk = 0; mk < pageResult.rows.length; mk++) {
                         pageResult.rows[mk][cn2] = (mk < vals2.length ? vals2[mk] : '');
                       }
