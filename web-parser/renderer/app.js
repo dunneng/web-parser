@@ -7905,7 +7905,11 @@ async function registerElements() {
                     });
                     var cssData = await cssResp.json();
                     var vals = (cssData.results || []).map(function(r2) { return r2["文本"] || ''; });
-                    var colName = elem.text || elem.selector;
+                    var colName = elem.text || (function(s) {
+                      var cs = (elem.clean_selector || elem.selector);
+                      var segs = cs.split('>');
+                      return segs[segs.length-1].trim();
+                    })(elem.selector);
                     if (pageResult.headers.indexOf(colName) < 0) pageResult.headers.push(colName);
                     for (var ri = 0; ri < pageResult.rows.length; ri++) {
                       // 快照优先：链提取已有值不动，注册补空洞
@@ -10403,7 +10407,11 @@ async function registerElements() {
                       });
                       var cd2 = await cr2.json();
                       var vals2 = (cd2.results || []).map(function(r2) { return r2["文本"] || ''; });
-                      var cn2 = elem2.text || elem2.selector;
+                      var cn2 = elem2.text || (function(s) {
+                        var cs = (elem2.clean_selector || elem2.selector);
+                        var segs = cs.split('>');
+                        return segs[segs.length-1].trim();
+                      })(elem2.selector);
                       if (pageResult.headers.indexOf(cn2) < 0) pageResult.headers.push(cn2);
                       for (var mk = 0; mk < pageResult.rows.length; mk++) {
                         // 快照优先：链提取已有值不动，注册补空洞
