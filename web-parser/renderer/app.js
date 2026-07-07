@@ -498,24 +498,26 @@ async function registerElements() {
             // 列定义
             // 列定义：label 用文本或 selector，sel 用容器内相对路径
             var cardSel = chainSel;
-            var colItems = unregistered.map(function(item) {
+            // 列定义 + 去重：同 label 合并
+            var labelMap = {};
+            unregistered.forEach(function(item) {
               var ei = item.elementInfo || {};
               var fullSel = item.selector || '';
-              // 去掉 #item_id_xxx > 前缀
               var relSel = fullSel.replace(/#\w+\s*>\s*/, '');
-              // 如果 cardSel 不为空，去掉卡片容器前缀
               if (cardSel && relSel.indexOf(cardSel) === 0) {
                 relSel = relSel.substring(cardSel.length).replace(/^\s*>\s*/, '');
               }
-              // label: 优先文本，其次 selector 最后一节
               var lbl = ei.text || '';
               if (!lbl) {
                 var segs = fullSel.split('>');
                 lbl = segs[segs.length-1].trim();
               }
-              return { label: lbl, sel: relSel || fullSel };
+              if (!labelMap[lbl]) {
+                labelMap[lbl] = { label: lbl, sel: relSel || fullSel, tag: ei.tag || '' };
+              }
             });
-            var selList = JSON.stringify(colItems.map(function(c) { return {label: c.label, sel: c.sel}; }));
+            var colItems = Object.keys(labelMap).map(function(k) { return labelMap[k]; });
+            var selList = JSON.stringify(colItems.map(function(c) { return {label: c.label, sel: c.sel, tag: c.tag}; }));
             var jsCode = '(function(){var items=' + selList + ';var deepSel=' + JSON.stringify(chainSel) + ';' +
               'var containers=document.querySelectorAll(deepSel);' +
               'var headers2=items.map(function(it){return it.label;});' +
@@ -524,7 +526,7 @@ async function registerElements() {
                 'var container=containers[ci];' +
                 'var row2={};' +
                 'for(var ii=0;ii<items.length;ii++){' +
-                  'try{var el=container.querySelector(items[ii].sel);row2[items[ii].label]=el?el.textContent.trim():"";}catch(e2){row2[items[ii].label]="";}' +
+                  'try{var el=container.querySelector(items[ii].sel);row2[items[ii].label]=el?(items[ii].tag==="img"?el.src:el.textContent.trim()):"";}catch(e2){row2[items[ii].label]="";}' +
                 '}' +
                 'rows2.push(row2);' +
               '}' +
