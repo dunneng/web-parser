@@ -471,7 +471,7 @@ window._editorCollapseAll = function() {
       if ((result.skipped || []).length > 0) msg += ', 跳过 ' + result.skipped.length + ' 个';
       setStatus(msg);
       // 构建批量行数组：用 unregistered 做列，autoMatched 做行
-      console.log('[批量注册] autoMatched=' + autoMatched.length + ' unregistered=' + unregistered.length + ' pageUrl=' + pageUrl);
+      _debugLog('[批量注册] autoMatched=' + autoMatched.length + ' unregistered=' + unregistered.length + ' pageUrl=' + (pageUrl||'').substring(0,80));
       try {
         if (autoMatched.length > 0 && unregistered.length > 0) {
           var colDefs2 = unregistered.map(function(item) {
@@ -490,7 +490,7 @@ window._editorCollapseAll = function() {
               }
             }
           });
-          console.log('[批量注册] 各列行数: ' + JSON.stringify(cols2.map(function(c){return c.vals.length;})));
+          _debugLog('[批量注册] 各列行数: ' + JSON.stringify(cols2.map(function(c){return c.vals.length;})));
           var maxRLen2 = 0;
           cols2.forEach(function(c) { if (c.vals.length > maxRLen2) maxRLen2 = c.vals.length; });
           var bRows2 = [];
@@ -505,11 +505,11 @@ window._editorCollapseAll = function() {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ page_url: pageUrl, headers: bHeaders2, rows: bRows2 })
             });
-            console.log('[批量注册] ' + bRows2.length + '行 x ' + bHeaders2.length + '列 → DB');
+            _debugLog('[批量注册] ' + bRows2.length + '行 x ' + bHeaders2.length + '列 → DB');
           }
         }
       } catch(e) {
-        console.log('[批量注册] 失败:', e.message);
+        _debugLog('[批量注册] 失败:', e.message);
       }
 
       // 先展示已注册面板（更重要的反馈），编辑器渲染用 rAF 延迟避免同步阻塞
@@ -10391,13 +10391,13 @@ window._editorCollapseAll = function() {
           // 批量注册兜底：快照漏行时从批量数据补
           try {
             var snapUrl = snapList[0] ? snapList[0].url : '';
-            console.log('[批量兜底] snapList=' + snapList.length + ' snapUrl=' + (snapUrl||'').substring(0,60));
+            _debugLog('[批量兜底] snapList=' + snapList.length + ' snapUrl=' + (snapUrl||'').substring(0,60));
             if (snapUrl) {
               var batchResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch?url=' + encodeURIComponent(snapUrl));
-              console.log('[批量兜底] API status=' + batchResp.status);
+              _debugLog('[批量兜底] API status=' + batchResp.status);
               if (batchResp.ok) {
                 var batchData = (await batchResp.json()).data;
-                console.log('[批量兜底] batchData=' + (batchData ? 'rows:'+batchData.rows.length : 'null'));
+                _debugLog('[批量兜底] batchData=' + (batchData ? 'rows:'+batchData.rows.length : 'null'));
                 if (batchData && batchData.rows && batchData.rows.length > 0) {
                   // 补列头：批量数据有的列加入 mergedHeaders
                   (batchData.headers || []).forEach(function(h) {
