@@ -8045,13 +8045,14 @@ async function registerElements() {
                   if (ch2 === bh2) continue;
                   var ov = false;
                   for (var oi = 0; oi < Math.min(mergedRows.length, batchData2.rows.length); oi++) {
-                    if (mergedRows[oi][bh2] && batchData2.rows[oi][bh2] && mergedRows[oi][bh2] === batchData2.rows[oi][bh2]) {
+                    if (mergedRows[oi][ch2] && batchData2.rows[oi][bh2] && mergedRows[oi][ch2] === batchData2.rows[oi][bh2]) {
                       ov = true; break;
                     }
                   }
                   if (ov) {
+                    // 链列扩展到批量所有行
                     for (var fi = 0; fi < batchData2.rows.length; fi++) {
-                      if (fi < mergedRows.length && !mergedRows[fi][bh2]) mergedRows[fi][bh2] = batchData2.rows[fi][bh2] || '';
+                      if (fi < mergedRows.length && !mergedRows[fi][ch2]) mergedRows[fi][ch2] = batchData2.rows[fi][bh2] || '';
                     }
                     var di = allHeaders.indexOf(bh2);
                     if (di >= 0) allHeaders.splice(di, 1);
@@ -10538,15 +10539,15 @@ async function registerElements() {
                       // 检查两列是否有重叠值，有就合并
                       var overlap = false;
                       for (var ri4 = 0; ri4 < Math.min(mergedRows.length, batchData.rows.length); ri4++) {
-                        if (mergedRows[ri4][bh] && batchData.rows[ri4][bh] && mergedRows[ri4][bh] === batchData.rows[ri4][bh]) {
+                        if (mergedRows[ri4][ch] && batchData.rows[ri4][bh] && mergedRows[ri4][ch] === batchData.rows[ri4][bh]) {
                           overlap = true; break;
                         }
                       }
                       if (overlap) {
-                        // 链列填空，批量列填链列空缺
+                        // 链列扩展到批量所有行
                         for (var ri5 = 0; ri5 < batchData.rows.length; ri5++) {
-                          if (ri5 < mergedRows.length && !mergedRows[ri5][bh]) {
-                            mergedRows[ri5][bh] = batchData.rows[ri5][bh] || '';
+                          if (ri5 < mergedRows.length && !mergedRows[ri5][ch]) {
+                            mergedRows[ri5][ch] = batchData.rows[ri5][bh] || '';
                           }
                         }
                         // 从 headers 中去掉多余批量列
