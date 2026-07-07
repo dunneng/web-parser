@@ -8159,18 +8159,17 @@ async function registerElements() {
                 if (!dr[mi][h]) dr[mi][h] = bd.rows[mi][h] || '';
               });
             }
-            // 跨列合并：链列和批量列各1列时自动合并
-            var bHdrs3 = (bd.headers || []).filter(function(h) { return dh.indexOf(h) >= 0 && h !== '来源URL' && h.charAt(0) !== '_'; });
-            var cHdrs3 = dh.filter(function(h) { return (bd.headers || []).indexOf(h) < 0 && h !== '来源URL' && h.charAt(0) !== '_'; });
-            _debugLog('[跨列合并] cHdrs=' + cHdrs3.length + ' bHdrs=' + bHdrs3.length + ' dh=' + dh.join(','));
-            if (cHdrs3.length === 1 && bHdrs3.length === 1) {
-              var ch3 = cHdrs3[0], bh3 = bHdrs3[0];
+            // 跨列合并：批量列直接填进第一个非meta数据列
+            var bHdr = (bd.headers || [])[0];
+            var cHdr = dh.filter(function(h) { return h !== '来源URL' && h.charAt(0) !== '_' && h !== bHdr; })[0];
+            _debugLog('[跨列合并] bHdr=' + (bHdr||'') + ' cHdr=' + (cHdr||''));
+            if (bHdr && cHdr) {
               for (var mi3 = 0; mi3 < bd.rows.length; mi3++) {
-                if (mi3 < dr.length && !dr[mi3][ch3]) dr[mi3][ch3] = bd.rows[mi3][bh3] || '';
+                if (mi3 < dr.length && !dr[mi3][cHdr]) dr[mi3][cHdr] = bd.rows[mi3][bHdr] || '';
               }
-              var di3 = dh.indexOf(bh3);
+              var di3 = dh.indexOf(bHdr);
               if (di3 >= 0) dh.splice(di3, 1);
-              dr.forEach(function(r) { delete r[bh3]; });
+              dr.forEach(function(r) { delete r[bHdr]; });
             }
             data.totalRows = dr.length;
           }
