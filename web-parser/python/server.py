@@ -820,6 +820,27 @@ async def clear_elements(element_ids: list[str] | None = None):
 #  元素链路提取
 # ═══════════════════════════════════════════
 
+
+@app.post("/api/elements/batch")
+async def upsert_element_batch(data: dict):
+    """批量存储注册元素行数组 {page_url, headers, rows}"""
+    page_url = data.get("page_url", "")
+    if not page_url:
+        raise HTTPException(400, "page_url required")
+    return db.upsert_element_batch(page_url, {
+        "headers": data.get("headers", []),
+        "rows": data.get("rows", []),
+    })
+
+@app.get("/api/elements/batch")
+async def get_element_batch(url: str = ""):
+    """取批量注册的行数组"""
+    if not url:
+        raise HTTPException(400, "url required")
+    result = db.get_element_batch(url)
+    if result is None:
+        return {"ok": True, "data": None}
+    return {"ok": True, "data": result}
 @app.post("/api/elements/chain")
 async def chain_from_elements(req: ElementChainRequest):
     """对已注册元素执行链路提取"""

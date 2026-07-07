@@ -345,6 +345,54 @@ window._editorCollapseAll = function() {
   var _registeredElementsCache = null;
 
 
+
+  /** 批量注册：deepestSelector 命中容器 → 逐容器 querySelector 注册元素 → 存行数组到 DB */
+  async function _batchRegisterElements(pageUrl) {
+    try {
+      var wv = document.getElementById('webview');
+      if (!wv) return;
+      // 取 deepestSelector
+      var chainInput = schemaChainInput.value.trim();
+      if (!chainInput) return;
+      // 取当前注册的元素（刚注册的这批 + 已有的）
+      var elResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements');
+      if (!elResp.ok) return;
+      var elData = await elResp.json();
+      var elems = (elData.elements || []).filter(function(e) { return e.page_url === pageUrl; });
+      if (elems.length === 0) return;
+      // 在 webview 中执行：deepestSelector 命中 → 每个容器内 querySelector 每个元素的 clean_selector
+      var selList = JSON.stringify(elems.map(function(e) { return {
+        label: e.text || e.selector,
+        sel: e.clean_selector || e.selector
+      }; }));
+      var jsCode = '(function(){var items=' + selList + ';var deepSel=' + JSON.stringify(chainInput) + ';' +
+        'var containers=document.querySelectorAll(deepSel);' +
+        'var headers=items.map(function(it){return it.label;});' +
+        'var rows=[];' +
+        'for(var ci=0;ci<containers.length;ci++){' +
+          'var container=containers[ci];' +
+          'var row={};' +
+          'for(var ii=0;ii<items.length;ii++){' +
+            'try{var el=container.querySelector(items[ii].sel);row[items[ii].label]=el?el.textContent.trim():"";}catch(e){row[items[ii].label]="";}' +
+          '}' +
+          'rows.push(row);' +
+        '}' +
+        'return JSON.stringify({headers:headers,rows:rows});' +
+      '})()';
+      var raw = await wv.executeJavaScript(jsCode);
+      var data = JSON.parse(raw || '{"headers":[],"rows":[]}');
+      if (!data.rows || data.rows.length === 0) return;
+      // 存到后端
+      await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ page_url: pageUrl, headers: data.headers, rows: data.rows })
+      });
+      console.log('[批量注册] ' + data.rows.length + '行 x ' + data.headers.length + '列 → DB');
+    } catch(e) {
+      console.log('[批量注册] 失败:', e.message);
+    }
+  }
+
   async function registerElements() {
     // 从 webview 读取自动匹配的元素
     var autoMatched = [];
@@ -591,6 +639,9 @@ window._editorCollapseAll = function() {
     Parser.state.queryResults = rows;
     renderQueryTable(rows);
     setStatus('已注册元素: ' + Parser.state.registeredElements.length + ' 个');
+    // 批量注册：用 deepestSelector 命中所有卡片，逐行 querySelector 填值存 DB
+    _batchRegisterElements(pageUrl);
+
   }
 
   async function showCollectedDataPanel(source) {
@@ -7932,6 +7983,35 @@ window._editorCollapseAll = function() {
       }
 
       var data = { rows: mergedRows, headers: allHeaders, totalRows: mergedRows.length };
+      // 批量注册兜底
+      try {
+        var snapUrl2 = (checked.length > 0 && allResults.length > 0) ? (snapList[0] ? snapList[0].url : '') : '';
+        if (snapUrl2) {
+          var batchResp2 = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch?url=' + encodeURIComponent(snapUrl2));
+          if (batchResp2.ok) {
+            var batchData2 = (await batchResp2.json()).data;
+            if (batchData2 && batchData2.rows && batchData2.rows.length > 0) {
+              (batchData2.headers || []).forEach(function(h) { if (allHeaders.indexOf(h) < 0) allHeaders.push(h); });
+              if (batchData2.rows.length > mergedRows.length) {
+                for (var bj = mergedRows.length; bj < batchData2.rows.length; bj++) {
+                  var pRow = {};
+                  (batchData2.headers || []).forEach(function(h) { pRow[h] = batchData2.rows[bj][h] || ''; });
+                  mergedRows.push(pRow);
+                }
+              }
+              for (var rk = 0; rk < Math.min(mergedRows.length, batchData2.rows.length); rk++) {
+                (batchData2.headers || []).forEach(function(h) {
+                  if (!mergedRows[rk][h]) mergedRows[rk][h] = batchData2.rows[rk][h] || '';
+                });
+              }
+              data.totalRows = mergedRows.length;
+              data.headers = allHeaders;
+              data.rows = mergedRows;
+            }
+          }
+        }
+      } catch(e) {}
+
       Parser.state.schemaPreviewData = data;
       renderModalPreviewTable(data);
       _refreshExportLinksBtn();
@@ -10314,6 +10394,44 @@ window._editorCollapseAll = function() {
           }
           result = { rows: mergedRows, headers: mergedHeaders, counts: mergedCounts, totalRows: mergedRows.length,
             _diag: { snapTotal: snapTotal, snapLoaded: snapLoaded, snapMatched: snapMatched } };
+
+          // 批量注册兜底：快照漏行时从批量数据补
+          try {
+            var snapUrl = snapList[0] ? snapList[0].url : '';
+            if (snapUrl) {
+              var batchResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch?url=' + encodeURIComponent(snapUrl));
+              if (batchResp.ok) {
+                var batchData = (await batchResp.json()).data;
+                if (batchData && batchData.rows && batchData.rows.length > 0) {
+                  // 补列头：批量数据有的列加入 mergedHeaders
+                  (batchData.headers || []).forEach(function(h) {
+                    if (mergedHeaders.indexOf(h) < 0) mergedHeaders.push(h);
+                  });
+                  // 补行：链提取行数 < 批量行数时，从批量数据追加行
+                  if (batchData.rows.length > mergedRows.length) {
+                    for (var bi = mergedRows.length; bi < batchData.rows.length; bi++) {
+                      var padRow = {};
+                      (batchData.headers || []).forEach(function(h) {
+                        padRow[h] = batchData.rows[bi][h] || '';
+                      });
+                      mergedRows.push(padRow);
+                    }
+                  }
+                  // 链提取已有的行，空缺列从批量数据补
+                  for (var ri = 0; ri < Math.min(mergedRows.length, batchData.rows.length); ri++) {
+                    (batchData.headers || []).forEach(function(h) {
+                      if (!mergedRows[ri][h]) {
+                        mergedRows[ri][h] = batchData.rows[ri][h] || '';
+                      }
+                    });
+                  }
+                  result.totalRows = mergedRows.length;
+                  result.headers = mergedHeaders;
+                  result.rows = mergedRows;
+                }
+              }
+            }
+          } catch(e) {}
         } else {
           // 无快照 → 只取当前页
           var html = await wv.executeJavaScript('document.documentElement.outerHTML');

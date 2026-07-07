@@ -66,6 +66,12 @@ def init_db():
                 updated_at  TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_elements_dedup ON elements(dedup_key);
+            CREATE TABLE IF NOT EXISTS element_batches (
+                page_url    TEXT NOT NULL PRIMARY KEY,
+                data_json   TEXT NOT NULL,
+                created_at  TEXT NOT NULL,
+                updated_at  TEXT NOT NULL
+            );
 
             CREATE TABLE IF NOT EXISTS collected (
                 collect_id  TEXT NOT NULL,
@@ -272,6 +278,25 @@ def list_elements() -> list[dict]:
         "clean_selector": r["clean_selector"] or "",
         "registered_at": r["created_at"], "updated_at": r["updated_at"],
     } for r in rows]
+
+
+def upsert_element_batch(page_url: str, data: dict) -> dict:
+    import json as _json
+    data_json = _json.dumps(data, ensure_ascii=False)
+    now = _now_iso()
+    with get_db() as db:
+        db.execute("INSERT INTO element_batches (page_url, data_json, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(page_url) DO UPDATE SET data_json=excluded.data_json, updated_at=excluded.updated_at", (page_url, data_json, now, now))
+        return {"ok": True}
+
+
+def get_element_batch(page_url: str) -> dict | None:
+    import json as _json
+    with get_db() as db:
+        row = db.execute("SELECT data_json FROM element_batches WHERE page_url = ?", (page_url,)).fetchone()
+        if row:
+            return _json.loads(row["data_json"])
+        return None
+
 
 
 def clear_elements(element_ids: list[str] | None = None) -> dict:
