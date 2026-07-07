@@ -7824,7 +7824,10 @@ window._editorCollapseAll = function() {
                     var colName = elem.text || elem.selector;
                     if (pageResult.headers.indexOf(colName) < 0) pageResult.headers.push(colName);
                     for (var ri = 0; ri < pageResult.rows.length; ri++) {
-                      pageResult.rows[ri][colName] = (ri < vals.length ? vals[ri] : '');
+                      // 快照优先：链提取已有值不动，注册补空洞
+                      if (!pageResult.rows[ri][colName]) {
+                        pageResult.rows[ri][colName] = (ri < vals.length ? vals[ri] : '');
+                      }
                     }
                   }
                 }
@@ -10290,7 +10293,10 @@ window._editorCollapseAll = function() {
                       var cn2 = elem2.text || elem2.selector;
                       if (pageResult.headers.indexOf(cn2) < 0) pageResult.headers.push(cn2);
                       for (var mk = 0; mk < pageResult.rows.length; mk++) {
-                        pageResult.rows[mk][cn2] = (mk < vals2.length ? vals2[mk] : '');
+                        // 快照优先：链提取已有值不动，注册补空洞
+                        if (!pageResult.rows[mk][cn2]) {
+                          pageResult.rows[mk][cn2] = (mk < vals2.length ? vals2[mk] : '');
+                        }
                       }
                     }
                   }
