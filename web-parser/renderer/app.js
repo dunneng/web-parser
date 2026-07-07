@@ -461,7 +461,8 @@ window._editorCollapseAll = function() {
         elementId: String(am.id || ''),
         href: am.href || '',
         src: am.src || '',
-        page_url: pageUrl
+        page_url: pageUrl,
+        clean_selector: _cleanSelector(am.css || '')
       });
     }
 
