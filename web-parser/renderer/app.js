@@ -535,15 +535,8 @@ async function registerElements() {
             wv2.executeJavaScript(jsCode).then(async function(raw2) {
               var data2 = JSON.parse(raw2 || '{"headers":[],"rows":[]}');
               if (data2.rows && data2.rows.length > 0) {
-                // 保存快照获取 snapshot_id
-                var snapId = 0;
-                try {
-                  var snapResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/save', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: pageUrl, html: await wv2.executeJavaScript('document.documentElement.outerHTML') })
-                  });
-                  if (snapResp.ok) { var sd = await snapResp.json(); snapId = sd.id || 0; }
-                } catch(e) {}
+                // 取已缓存的快照ID
+                var snapId = _snapList.length > 0 ? _snapList[_snapList.length - 1].id : 0;
                 fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ page_url: pageUrl, snapshot_id: snapId, headers: data2.headers, rows: data2.rows })
