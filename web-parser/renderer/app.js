@@ -9787,8 +9787,10 @@ async function registerElements() {
       addBtn.addEventListener('click', function() {
         if (!node.subChains) node.subChains = [];
         node.subChains.push({ selector: '', chainType: getChainType(), chainSegments: [] });
-        renderChainEditor(path);
+        var parentKey = JSON.stringify(path);
+        _expandedChains[parentKey] = true;
         renderChainTree();
+        // 空子链路暂不导航，用户输入选择器解析后才有 segment
       });
     }
 
@@ -9965,8 +9967,10 @@ async function registerElements() {
                   });
                   var parentKey = JSON.stringify(path);
                   _expandedChains[parentKey] = true;
-// renderChainTree();
-                  renderChainEditor(path);
+                  var newSubIdx = node.subChains.length - sels.length;
+                  var newPath = path.concat([newSubIdx, 0]);
+                  renderChainTree();
+                  selectChainTreeNode(newPath);
                   autoRefreshChainPreview();
                 });
               }
@@ -10109,14 +10113,15 @@ async function registerElements() {
       var tag = tagMatch ? tagMatch[1].toLowerCase() : '';
       sc.chainSegments.push({ selector: parts[i], tag: tag, extractions: [] });
     }
-    // 自动展开父节点，确保新子链路在树中可见
+    // 自动展开父节点 + 跳转到子链路第一段
     var parentKey = JSON.stringify(path);
     _expandedChains[parentKey] = true;
+    var newPath = path.concat([sci, 0]);
     renderChainTree();
-    renderChainEditor(path);
+    selectChainTreeNode(newPath);
     autoRefreshChainPreview();
     // 闪烁提示已解析
-    _flashSubChainHint(path, '已解析 ' + parts.length + ' 段');
+    _flashSubChainHint(newPath, '已解析 ' + parts.length + ' 段');
   }
 
   /** 在树中闪烁提示信息（短暂高亮） */
