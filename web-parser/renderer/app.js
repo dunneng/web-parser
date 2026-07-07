@@ -10273,28 +10273,6 @@ window._editorCollapseAll = function() {
                 var srcUrlCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '来源URL';
                 pageResult.rows.forEach(function(r) { r["来源URL"] = snap.url || ''; });
                 // 不推入 headers
-                // 用注册元素补充字段
-                try {
-                  var elResp2 = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements');
-                  if (elResp2.ok) {
-                    var elData2 = await elResp2.json();
-                    var elems2 = (elData2.elements || []).filter(function(e) { return e.page_url === snap.url; });
-                    for (var ej = 0; ej < elems2.length; ej++) {
-                      var elem2 = elems2[ej];
-                      var cr2 = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/css', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ html: snapHtml, query: elem2.selector })
-                      });
-                      var cd2 = await cr2.json();
-                      var vals2 = (cd2.results || []).map(function(r2) { return r2["文本"] || ''; });
-                      var cn2 = elem2.text || elem2.selector;
-                      if (pageResult.headers.indexOf(cn2) < 0) pageResult.headers.push(cn2);
-                      for (var mk = 0; mk < pageResult.rows.length; mk++) {
-                        pageResult.rows[mk][cn2] = (mk < vals2.length ? vals2[mk] : '');
-                      }
-                    }
-                  }
-                } catch(e) {}
                 mergedRows = mergedRows.concat(pageResult.rows);
                 if (!mergedHeaders.length && pageResult.headers) mergedHeaders = pageResult.headers;
                 if (pageResult.counts) mergedCounts = pageResult.counts;
