@@ -532,12 +532,21 @@ async function registerElements() {
               '}' +
               'return JSON.stringify({headers:headers2,rows:rows2});' +
             '})()';
-            wv2.executeJavaScript(jsCode).then(function(raw2) {
+            wv2.executeJavaScript(jsCode).then(async function(raw2) {
               var data2 = JSON.parse(raw2 || '{"headers":[],"rows":[]}');
               if (data2.rows && data2.rows.length > 0) {
+                // 保存快照获取 snapshot_id
+                var snapId = 0;
+                try {
+                  var snapResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/save', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: pageUrl, html: await wv2.executeJavaScript('document.documentElement.outerHTML') })
+                  });
+                  if (snapResp.ok) { var sd = await snapResp.json(); snapId = sd.id || 0; }
+                } catch(e) {}
                 fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ page_url: pageUrl, headers: data2.headers, rows: data2.rows })
+                  body: JSON.stringify({ page_url: pageUrl, snapshot_id: snapId, headers: data2.headers, rows: data2.rows })
                 });
                 _debugLog('[批量注册] ' + data2.rows.length + '行 x ' + data2.headers.length + '列 -> DB');
               }
@@ -10472,7 +10481,8 @@ async function registerElements() {
           try {
             var snapUrl = snapList[0] ? snapList[0].url : '';
             if (snapUrl) {
-              var bResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch?url=' + encodeURIComponent(snapUrl));
+              var snapId = snapList[0] ? snapList[0].id : 0;
+              var bResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch?snapshot_id=' + snapId);
               if (bResp.ok) {
                 var bData = (await bResp.json()).data;
                 if (bData && bData.rows && bData.rows.length > 0) {
@@ -10880,7 +10890,11 @@ async function registerElements() {
           }
         }
         // 保存到 DB（始终覆盖）→ 调共存合并
-        var refUrl2 = (checked.length > 0 && checked[0].schema && checked[0].schema._listPageUrl) || '';
+        // 取快照列表获取 snapshot_id
+        var snapList2 = [];
+        try { var sl2 = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list');
+          if (sl2.ok) { var sd2 = await sl2.json(); snapList2 = sd2.snapshots || []; } } catch(e) {}
+        var snapId2 = snapList2.length > 0 ? snapList2[0].id : 0;
         for (var si = 0; si < allResults.length && si < checked.length; si++) {
           try {
             await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/save', {
@@ -10890,7 +10904,7 @@ async function registerElements() {
             // 共存合并：链数据+批量数据
             var mr = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/merge/query', {
               method: 'POST', headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({ scheme_name: checked[si].name, page_url: refUrl2 })
+              body: JSON.stringify({ scheme_name: checked[si].name, snapshot_id: snapId2 })
             });
             if (mr.ok) {
               var md = await mr.json();

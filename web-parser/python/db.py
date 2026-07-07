@@ -66,11 +66,21 @@ def init_db():
                 updated_at  TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_elements_dedup ON elements(dedup_key);
+        # 迁移：旧表无 snapshot_id 列，重建
+        try:
+            cur = conn.execute("PRAGMA table_info(element_batches)")
+            cols = [c[1] for c in cur.fetchall()]
+            if 'snapshot_id' not in cols:
+                conn.execute("DROP TABLE IF EXISTS element_batches")
+        except Exception:
+            pass
+
             CREATE TABLE IF NOT EXISTS element_batches (
-                page_url    TEXT NOT NULL PRIMARY KEY,
+                page_url    TEXT NOT NULL,
                 data_json   TEXT NOT NULL,
                 created_at  TEXT NOT NULL,
-                updated_at  TEXT NOT NULL
+                updated_at  TEXT NOT NULL,
+                snapshot_id INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS collected (
@@ -280,19 +290,19 @@ def list_elements() -> list[dict]:
     } for r in rows]
 
 
-def upsert_element_batch(page_url: str, data: dict) -> dict:
+def upsert_element_batch(page_url: str, snapshot_id: int, data: dict) -> dict:
     import json as _json
     data_json = _json.dumps(data, ensure_ascii=False)
     now = _now_iso()
     with get_db() as db:
-        db.execute("INSERT INTO element_batches (page_url, data_json, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(page_url) DO UPDATE SET data_json=excluded.data_json, updated_at=excluded.updated_at", (page_url, data_json, now, now))
+        db.execute("INSERT INTO element_batches (page_url, data_json, created_at, updated_at, snapshot_id) VALUES (?, ?, ?, ?, ?) ON CONFLICT(snapshot_id) DO UPDATE SET data_json=excluded.data_json, updated_at=excluded.updated_at", (page_url, data_json, now, now, snapshot_id))
         return {"ok": True}
 
 
-def get_element_batch(page_url: str) -> dict | None:
+def get_element_batch(snapshot_id: int) -> dict | None:
     import json as _json
     with get_db() as db:
-        row = db.execute("SELECT data_json FROM element_batches WHERE page_url = ?", (page_url,)).fetchone()
+        row = db.execute("SELECT data_json FROM element_batches WHERE snapshot_id = ?", (snapshot_id,)).fetchone()
         if row:
             return _json.loads(row["data_json"])
         return None
@@ -1074,7 +1084,7 @@ def merge_rows(chain_rows: list[dict], chain_headers: list[str],
     return {"rows": rows, "headers": all_headers, "totalRows": len(rows)}
 
 
-def merge_chain_and_batch(scheme_name: str, page_url: str = "") -> dict:
+def merge_chain_and_batch(scheme_name: str, snapshot_id: int = 0) -> dict:
     """从库读取 chain_data + element_batches，调 merge_rows 合并"""
     import json as _json
 
@@ -1091,10 +1101,10 @@ def merge_chain_and_batch(scheme_name: str, page_url: str = "") -> dict:
             chain_rows = d.get("rows", [])
             chain_headers = d.get("headers", [])
 
-        if page_url:
+        if snapshot_id:
             r2 = db.execute(
-                "SELECT data_json FROM element_batches WHERE page_url=?",
-                (page_url,),
+                "SELECT data_json FROM element_batches WHERE snapshot_id=?",
+                (snapshot_id,),
             ).fetchone()
             if r2:
                 d2 = _json.loads(r2["data_json"])

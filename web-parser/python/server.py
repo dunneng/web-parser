@@ -823,24 +823,27 @@ async def clear_elements(element_ids: list[str] | None = None):
 
 @app.post("/api/elements/batch")
 async def upsert_element_batch(data: dict):
-    """批量存储注册元素行数组 {page_url, headers, rows}"""
+    """批量存储注册元素行数组 {page_url, snapshot_id, headers, rows}"""
     page_url = data.get("page_url", "")
+    snapshot_id = data.get("snapshot_id", 0)
     if not page_url:
         raise HTTPException(400, "page_url required")
-    return db.upsert_element_batch(page_url, {
+    return db.upsert_element_batch(page_url, snapshot_id, {
         "headers": data.get("headers", []),
         "rows": data.get("rows", []),
     })
 
 @app.get("/api/elements/batch")
-async def get_element_batch(url: str = ""):
-    """取批量注册的行数组"""
-    if not url:
-        raise HTTPException(400, "url required")
-    result = db.get_element_batch(url)
-    if result is None:
-        return {"ok": True, "data": None}
-    return {"ok": True, "data": result}
+async def get_element_batch(url: str = "", snapshot_id: int = 0):
+    """取批量注册的行数组（优先 snapshot_id，回退 url 兼容旧数据）"""
+    if snapshot_id:
+        result = db.get_element_batch(snapshot_id)
+        if result is not None:
+            return {"ok": True, "data": result}
+    if url:
+        result = db.get_element_batch(0)  # fallback
+        return {"ok": True, "data": result} if result else {"ok": True, "data": None}
+    raise HTTPException(400, "url or snapshot_id required")
 @app.post("/api/elements/chain")
 async def chain_from_elements(req: ElementChainRequest):
     """对已注册元素执行链路提取"""
@@ -983,7 +986,7 @@ async def merge_query(data: dict):
     """保存并查询用：从库读取链数据+批量数据，合并"""
     return db.merge_chain_and_batch(
         data.get("scheme_name", ""),
-        data.get("page_url", ""),
+        data.get("snapshot_id", 0),
     )
 
 @app.put("/api/chain-data/update-row")
