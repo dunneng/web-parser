@@ -1011,3 +1011,94 @@ def clear_page_snapshots() -> dict:
     with get_db() as db:
         db.execute("DELETE FROM page_snapshots")
         return {"ok": True, "cleared": True}
+
+
+# ── 共存合并 ──
+
+def merge_rows(chain_rows: list[dict], chain_headers: list[str],
+               batch_rows: list[dict], batch_headers: list[str]) -> dict:
+    """共存合并：两源等权拼接去重。
+    非空率最高的列做 key，同 key 行合并（有值不动，空洞补另一源）。
+    """
+    if not chain_rows and not batch_rows:
+        return {"rows": [], "headers": [], "totalRows": 0}
+
+    # 只输出链列（批量列不追加到表头）
+    all_headers = list(chain_headers)
+
+    # 补全列（双源都补）
+    for row in chain_rows:
+        for h in all_headers:
+            if h not in row:
+                row[h] = ""
+    for row in batch_rows:
+        for h in all_headers:
+            if h not in row:
+                row[h] = ""
+
+    # 找 key 列：链列中非空率最高的（排除来源URL和_开头）
+    key_col = None
+    data_cols = [h for h in all_headers if h != "来源URL" and not h.startswith("_")]
+    if data_cols:
+        best = -1
+        for h in data_cols:
+            filled = sum(1 for r in chain_rows + batch_rows if r.get(h))
+            if filled > best:
+                best = filled
+                key_col = h
+    if not key_col:
+        key_col = "来源URL" if "来源URL" in all_headers else None
+
+    # 同 key 合并
+    merged = {}
+    order = []
+
+    for row in chain_rows + batch_rows:
+        row_key = (row.get(key_col) or "").strip() if key_col else ""
+        if not row_key:
+            # 无 key 的行直接追加
+            order.append(("__new__", len(order)))
+            merged[("__new__", len(order) - 1)] = dict(row)
+            continue
+
+        if row_key in merged:
+            existing = merged[row_key]
+            for h in all_headers:
+                if not existing.get(h) and row.get(h):
+                    existing[h] = row[h]
+        else:
+            merged[row_key] = dict(row)
+            order.append(row_key)
+
+    rows = [merged[k] for k in order]
+    return {"rows": rows, "headers": all_headers, "totalRows": len(rows)}
+
+
+def merge_chain_and_batch(scheme_name: str, page_url: str = "") -> dict:
+    """从库读取 chain_data + element_batches，调 merge_rows 合并"""
+    import json as _json
+
+    chain_rows, chain_headers = [], []
+    batch_rows, batch_headers = [], []
+
+    with get_db() as db:
+        r = db.execute(
+            "SELECT data_json FROM chain_data WHERE scheme_name=?",
+            (scheme_name,),
+        ).fetchone()
+        if r:
+            d = _json.loads(r["data_json"])
+            chain_rows = d.get("rows", [])
+            chain_headers = d.get("headers", [])
+
+        if page_url:
+            r2 = db.execute(
+                "SELECT data_json FROM element_batches WHERE page_url=?",
+                (page_url,),
+            ).fetchone()
+            if r2:
+                d2 = _json.loads(r2["data_json"])
+                batch_rows = d2.get("rows", [])
+                batch_headers = d2.get("headers", [])
+
+    return merge_rows(chain_rows, chain_headers, batch_rows, batch_headers)

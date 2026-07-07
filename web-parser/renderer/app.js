@@ -10468,47 +10468,25 @@ async function registerElements() {
           result = { rows: mergedRows, headers: mergedHeaders, counts: mergedCounts, totalRows: mergedRows.length,
             _diag: { snapTotal: snapTotal, snapLoaded: snapLoaded, snapMatched: snapMatched } };
 
-          // 批量注册兜底：快照漏行时从批量数据补
+          // ── 共存合并：调 /api/merge/inline ──
           try {
             var snapUrl = snapList[0] ? snapList[0].url : '';
-            _debugLog('[批量兜底] snapList=' + snapList.length + ' snapUrl=' + (snapUrl||'').substring(0,60));
             if (snapUrl) {
-              var batchResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch?url=' + encodeURIComponent(snapUrl));
-              _debugLog('[批量兜底] API status=' + batchResp.status);
-              if (batchResp.ok) {
-                var batchData = (await batchResp.json()).data;
-                _debugLog('[批量兜底] batchData=' + (batchData ? 'rows:'+batchData.rows.length : 'null'));
-                if (batchData && batchData.rows && batchData.rows.length > 0) {
-                  // 批量只填空洞：取第一个链列+批量列，补行填空
-                  var bCol = (batchData.headers || [])[0];
-                  var cCol = mergedHeaders.filter(function(h) { return h !== '来源URL' && h.charAt(0) !== '_'; })[0];
-                  // 补行：链提取行数 < 批量行数时，从批量数据追加行
-                  if (batchData.rows.length > mergedRows.length) {
-                    for (var bi = mergedRows.length; bi < batchData.rows.length; bi++) {
-                      var padRow = {}; padRow[cCol] = batchData.rows[bi][bCol] || '';
-                      mergedRows.push(padRow);
-                    }
+              var bResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch?url=' + encodeURIComponent(snapUrl));
+              if (bResp.ok) {
+                var bData = (await bResp.json()).data;
+                if (bData && bData.rows && bData.rows.length > 0) {
+                  var mr = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/merge/inline', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                      chain_rows: result.rows, chain_headers: result.headers,
+                      batch_rows: bData.rows, batch_headers: bData.headers
+                    })
+                  });
+                  if (mr.ok) {
+                    var md = await mr.json();
+                    if (md.rows) result = md;
                   }
-                  for (var ri = 0; ri < Math.min(mergedRows.length, batchData.rows.length); ri++) {
-                    if (!mergedRows[ri][cCol]) mergedRows[ri][cCol] = batchData.rows[ri][bCol] || '';
-                  }
-                                    // 跨列合并：链列和批量列各只有1列时自动合并
-                  var nBatchCols = (batchData.headers || []).filter(function(h) { return mergedHeaders.indexOf(h) >= 0; }).length;
-                  var nChainCols = mergedHeaders.length - nBatchCols;
-                  if (nChainCols === 1 && nBatchCols === 1) {
-                    var chCol = mergedHeaders.filter(function(h) { return (batchData.headers || []).indexOf(h) < 0; })[0];
-                    var bhCol = (batchData.headers || []).filter(function(h) { return mergedHeaders.indexOf(h) >= 0; })[0];
-                    if (chCol && bhCol) {
-                      for (var mi = 0; mi < batchData.rows.length; mi++) {
-                        if (mi < mergedRows.length && !mergedRows[mi][chCol]) mergedRows[mi][chCol] = batchData.rows[mi][bhCol] || '';
-                      }
-                      mergedHeaders.splice(mergedHeaders.indexOf(bhCol), 1);
-                      mergedRows.forEach(function(r) { delete r[bhCol]; });
-                    }
-                  }
-                  result.totalRows = mergedRows.length;
-                  result.headers = mergedHeaders;
-                  result.rows = mergedRows;
                 }
               }
             }
@@ -10901,13 +10879,29 @@ async function registerElements() {
             }
           }
         }
-        // 保存到 DB（始终覆盖）
+        // 保存到 DB（始终覆盖）→ 调共存合并
+        var refUrl2 = (checked.length > 0 && checked[0].schema && checked[0].schema._listPageUrl) || '';
         for (var si = 0; si < allResults.length && si < checked.length; si++) {
           try {
             await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/save', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ scheme_name: checked[si].name, rows: allResults[si].rows, headers: allResults[si].headers })
             });
+            // 共存合并：链数据+批量数据
+            var mr = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/merge/query', {
+              method: 'POST', headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({ scheme_name: checked[si].name, page_url: refUrl2 })
+            });
+            if (mr.ok) {
+              var md = await mr.json();
+              if (md.rows) {
+                // 用合并结果覆盖链数据
+                await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/save', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ scheme_name: checked[si].name, rows: md.rows, headers: md.headers })
+                });
+              }
+            }
           } catch (e) { setStatus('存库失败: ' + checked[si].name); }
         }
         if (allResults.length === 0) {

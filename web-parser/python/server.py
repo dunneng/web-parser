@@ -966,6 +966,26 @@ async def query_chain_data(schemes: str = "", link_col: str = "", link_cols: str
 async def delete_chain_data(scheme_name: str):
     return db.delete_chain_data(scheme_name)
 
+# ── 共存合并 ──
+
+@app.post("/api/merge/inline")
+async def merge_inline(data: dict):
+    """预览用：传当前链提取结果+批量数据，直接合并"""
+    return db.merge_rows(
+        data.get("chain_rows", []),
+        data.get("chain_headers", []),
+        data.get("batch_rows", []),
+        data.get("batch_headers", []),
+    )
+
+@app.post("/api/merge/query")
+async def merge_query(data: dict):
+    """保存并查询用：从库读取链数据+批量数据，合并"""
+    return db.merge_chain_and_batch(
+        data.get("scheme_name", ""),
+        data.get("page_url", ""),
+    )
+
 @app.put("/api/chain-data/update-row")
 async def update_chain_row(scheme_name: str, row_index: int, data: dict):
     return db.update_chain_row(scheme_name, row_index, data)
