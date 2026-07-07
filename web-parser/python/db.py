@@ -61,6 +61,7 @@ def init_db():
                 href        TEXT,
                 src         TEXT,
                 page_url    TEXT DEFAULT '',
+                clean_selector TEXT DEFAULT '',
                 created_at  TEXT NOT NULL,
                 updated_at  TEXT NOT NULL
             );
@@ -175,6 +176,12 @@ def init_db():
         except Exception:
             pass
 
+        # 迁移：elements 表添加 clean_selector 列
+        try:
+            conn.execute("ALTER TABLE elements ADD COLUMN clean_selector TEXT DEFAULT ''")
+        except Exception:
+            pass
+
         logger.info(f"数据库已初始化: {DB_PATH}")
     finally:
         conn.close()
@@ -218,21 +225,23 @@ def register_elements(elements: list[dict]) -> dict:
                 update_rows.append((elem.get("outerHTML",""), elem.get("selector",""), elem.get("xpath",""),
                     elem.get("source",""), elem.get("tag",""), elem.get("text",""),
                     elem.get("className",""), elem.get("elementId",""),
-                    elem.get("href",""), elem.get("src",""), elem.get("page_url",""), now, eid))
+                    elem.get("href",""), elem.get("src",""), elem.get("page_url",""),
+                    elem.get("clean_selector",""), now, eid))
                 updated.append(eid)
             else:
                 eid = f"elem_{int(time.time()*1000)}_{len(registered)+len(updated)}"
                 new_rows.append((eid, dk, elem.get("outerHTML",""), elem.get("selector",""),
                     elem.get("xpath",""), elem.get("source",""), elem.get("tag",""),
                     elem.get("text",""), elem.get("className",""), elem.get("elementId",""),
-                    elem.get("href",""), elem.get("src",""), elem.get("page_url",""), now, now))
+                    elem.get("href",""), elem.get("src",""), elem.get("page_url",""),
+                    elem.get("clean_selector",""), now, now))
                 registered.append(eid)
 
         # 3. 批量 UPDATE（一次 SQL）
         if update_rows:
             db.executemany("""
                 UPDATE elements SET html=?, selector=?, xpath=?, source=?, tag=?,
-                    text_content=?, class_name=?, element_id=?, href=?, src=?, page_url=?, updated_at=?
+                    text_content=?, class_name=?, element_id=?, href=?, src=?, page_url=?, clean_selector=?, updated_at=?
                 WHERE id=?
             """, update_rows)
 
@@ -240,8 +249,8 @@ def register_elements(elements: list[dict]) -> dict:
         if new_rows:
             db.executemany("""
                 INSERT INTO elements (id, dedup_key, html, selector, xpath, source,
-                    tag, text_content, class_name, element_id, href, src, page_url, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    tag, text_content, class_name, element_id, href, src, page_url, clean_selector, created_at, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, new_rows)
 
         total = db.execute("SELECT COUNT(*) as cnt FROM elements").fetchone()["cnt"]
@@ -260,6 +269,7 @@ def list_elements() -> list[dict]:
         "tag": r["tag"], "text": r["text_content"], "className": r["class_name"],
         "elementId": r["element_id"], "href": r["href"], "src": r["src"],
         "page_url": r["page_url"] or "",
+        "clean_selector": r["clean_selector"] or "",
         "registered_at": r["created_at"], "updated_at": r["updated_at"],
     } for r in rows]
 

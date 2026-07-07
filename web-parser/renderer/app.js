@@ -344,6 +344,27 @@ window._editorCollapseAll = function() {
 
   var _registeredElementsCache = null;
 
+
+  /** 清洗选择器：去ID/裸标签/随机类名，保留跨页通用的类名路径 */
+  function _cleanSelector(sel) {
+    if (!sel) return '';
+    var s = sel;
+    // 过滤ID
+    s = s.replace(/#[a-zA-Z][\w-]*/g, '');
+    // 过滤伪类
+    s = s.replace(/:(nth-of-type|nth-child|first-of-type|last-of-type|only-of-type|first-child|last-child|only-child)(\(\d+\))?/gi, '');
+    // 过滤裸标签：只保留含类名的段
+    var parts = s.split('>').map(function(p) { return p.trim(); }).filter(Boolean);
+    parts = parts.filter(function(p) { return p.indexOf('.') >= 0; });
+    // 过滤随机类名（_ 开头 / sc- 开头）
+    parts = parts.map(function(p) {
+      return p.replace(/\.[a-zA-Z_][\w-]*/g, function(m) {
+        return /^\._|^\.sc-/.test(m) ? '' : m;
+      });
+    });
+    return parts.join(' > ').replace(/\s+/g, ' ').trim();
+  }
+
   async function registerElements() {
     // 从 webview 读取自动匹配的元素
     var autoMatched = [];
@@ -393,7 +414,8 @@ window._editorCollapseAll = function() {
             elementId: cei.id || '',
             href: cei.href || '',
             src: cei.src || '',
-            page_url: pageUrl
+            page_url: pageUrl,
+            clean_selector: _cleanSelector(child.selector || '')
           });
         }
         continue;
@@ -412,7 +434,8 @@ window._editorCollapseAll = function() {
         elementId: ei.id || '',
         href: ei.href || '',
         src: ei.src || '',
-        page_url: pageUrl
+        page_url: pageUrl,
+        clean_selector: _cleanSelector(item.selector || ei.css || '')
       });
     }
 
@@ -7817,7 +7840,7 @@ window._editorCollapseAll = function() {
                     var elem = elems[ei2];
                     var cssResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/css', {
                       method: 'POST', headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ html: snapHtml, query: elem.selector })
+                      body: JSON.stringify({ html: snapHtml, query: elem.clean_selector || elem.selector })
                     });
                     var cssData = await cssResp.json();
                     var vals = (cssData.results || []).map(function(r2) { return r2["文本"] || ''; });
@@ -10286,7 +10309,7 @@ window._editorCollapseAll = function() {
                       var elem2 = elems2[ej];
                       var cr2 = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/css', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ html: snapHtml, query: elem2.selector })
+                        body: JSON.stringify({ html: snapHtml, query: elem2.clean_selector || elem2.selector })
                       });
                       var cd2 = await cr2.json();
                       var vals2 = (cd2.results || []).map(function(r2) { return r2["文本"] || ''; });

@@ -420,6 +420,7 @@ class RegisterElementItem(BaseModel):
     href: str = ""
     src: str = ""
     page_url: str = ""
+    clean_selector: str = ""
 
 class RegisterRequest(BaseModel):
     elements: list[RegisterElementItem]
@@ -800,6 +801,7 @@ async def register_elements(req: RegisterRequest):
             "href": elem.href,
             "src": elem.src,
             "page_url": elem.page_url,
+            "clean_selector": elem.clean_selector,
         })
     return db.register_elements(payload)
 
