@@ -1,6 +1,6 @@
 {
   "name": "web-parser",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "网页源码解析器 - 可视化提取网页数据并导出Excel",
   "author": "WebParser",
   "main": "main.js",
