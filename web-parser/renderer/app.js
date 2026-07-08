@@ -467,6 +467,22 @@ async function registerElements() {
       });
     }
 
+    // 获取当前快照 ID 注入到所有注册元素
+    var snapId = 0;
+    try {
+      var slResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list');
+      if (slResp.ok) {
+        var slData = await slResp.json();
+        var snaps = slData.snapshots || [];
+        snapId = snaps.length > 0 ? snaps[snaps.length - 1].id : 0;
+      }
+    } catch(e) {}
+    if (snapId) {
+      for (var pi = 0; pi < payload.length; pi++) {
+        payload[pi].snapshot_id = snapId;
+      }
+    }
+
     try {
       console.log('[注册调试] payload长度=' + payload.length + ' 首条=' + JSON.stringify(payload[0] || {}).substring(0, 200));
       console.log('[注册调试] 完整body长度=' + JSON.stringify({elements:payload}).length);

@@ -208,6 +208,12 @@ def init_db():
         except Exception:
             pass
 
+        # 迁移：elements 表添加 snapshot_id 列（关联 page_snapshots）
+        try:
+            conn.execute("ALTER TABLE elements ADD COLUMN snapshot_id INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
         logger.info(f"数据库已初始化: {DB_PATH}")
     finally:
         conn.close()
@@ -252,7 +258,7 @@ def register_elements(elements: list[dict]) -> dict:
                     elem.get("source",""), elem.get("tag",""), elem.get("text",""),
                     elem.get("className",""), elem.get("elementId",""),
                     elem.get("href",""), elem.get("src",""), elem.get("page_url",""),
-                    elem.get("clean_selector",""), now, eid))
+                    elem.get("clean_selector",""), elem.get("snapshot_id", 0), now, eid))
                 updated.append(eid)
             else:
                 eid = f"elem_{int(time.time()*1000)}_{len(registered)+len(updated)}"
@@ -260,14 +266,14 @@ def register_elements(elements: list[dict]) -> dict:
                     elem.get("xpath",""), elem.get("source",""), elem.get("tag",""),
                     elem.get("text",""), elem.get("className",""), elem.get("elementId",""),
                     elem.get("href",""), elem.get("src",""), elem.get("page_url",""),
-                    elem.get("clean_selector",""), now, now))
+                    elem.get("clean_selector",""), elem.get("snapshot_id", 0), now, now))
                 registered.append(eid)
 
         # 3. 批量 UPDATE（一次 SQL）
         if update_rows:
             db.executemany("""
                 UPDATE elements SET html=?, selector=?, xpath=?, source=?, tag=?,
-                    text_content=?, class_name=?, element_id=?, href=?, src=?, page_url=?, clean_selector=?, updated_at=?
+                    text_content=?, class_name=?, element_id=?, href=?, src=?, page_url=?, clean_selector=?, snapshot_id=?, updated_at=?
                 WHERE id=?
             """, update_rows)
 
@@ -275,8 +281,8 @@ def register_elements(elements: list[dict]) -> dict:
         if new_rows:
             db.executemany("""
                 INSERT INTO elements (id, dedup_key, html, selector, xpath, source,
-                    tag, text_content, class_name, element_id, href, src, page_url, clean_selector, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    tag, text_content, class_name, element_id, href, src, page_url, clean_selector, snapshot_id, created_at, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, new_rows)
 
         total = db.execute("SELECT COUNT(*) as cnt FROM elements").fetchone()["cnt"]
@@ -296,6 +302,7 @@ def list_elements() -> list[dict]:
         "elementId": r["element_id"], "href": r["href"], "src": r["src"],
         "page_url": r["page_url"] or "",
         "clean_selector": r["clean_selector"] or "",
+        "snapshot_id": r["snapshot_id"] or 0,
         "registered_at": r["created_at"], "updated_at": r["updated_at"],
     } for r in rows]
 
@@ -1159,8 +1166,83 @@ def merge_rows(chain_rows: list[dict], chain_headers: list[str],
     return {"rows": rows, "headers": all_headers, "totalRows": len(rows)}
 
 
+def _supplement_elements(chain_rows: list[dict], chain_headers: list[str],
+                         snapshot_id: int, conn=None) -> tuple[list[dict], list[str], int]:
+    """用注册元素的选择器对快照 HTML 做 CSS 提取，补充链路结果空洞。
+    快照优先：链提取已有值不动，仅补空洞。
+    返回 (rows, headers, supplemented_field_count)
+    """
+    if not snapshot_id or not chain_rows:
+        return chain_rows, chain_headers, 0
+
+    own_conn = conn is None
+    if own_conn:
+        conn = get_connection()
+    try:
+        # 取快照 HTML
+        html_row = conn.execute(
+            "SELECT html FROM page_snapshots WHERE id=?", (snapshot_id,)
+        ).fetchone()
+        if not html_row or not html_row["html"]:
+            return chain_rows, chain_headers, 0
+        snap_html = html_row["html"]
+
+        # 取该快照下关联的注册元素（有 clean_selector 的）
+        elems = conn.execute(
+            "SELECT clean_selector, text_content, selector FROM elements "
+            "WHERE snapshot_id=? AND clean_selector!=''",
+            (snapshot_id,)
+        ).fetchall()
+        if not elems:
+            return chain_rows, chain_headers, 0
+
+        from lxml import html as lxml_html
+        try:
+            doc = lxml_html.fromstring(snap_html.encode("utf-8", errors="replace"))
+        except Exception:
+            return chain_rows, chain_headers, 0
+
+        supplemented = 0
+        for elem in elems:
+            sel = elem["clean_selector"]
+            col_name = elem["text_content"] or ""
+            if not col_name:
+                # 从 selector 末段推导列名
+                segs = sel.split(">")
+                col_name = segs[-1].strip() if segs else sel.strip()
+
+            try:
+                els = doc.cssselect(sel)
+            except Exception:
+                continue
+            vals = []
+            for el in els:
+                txt = (el.text_content() or "").strip()
+                vals.append(txt[:500])
+
+            if not vals:
+                continue
+
+            # 补列头
+            if col_name not in chain_headers:
+                chain_headers.append(col_name)
+
+            # 按索引补空洞（快照优先：已有值不动）
+            for i in range(min(len(chain_rows), len(vals))):
+                row = chain_rows[i]
+                if not row.get(col_name):
+                    row[col_name] = vals[i]
+
+            supplemented += 1
+
+        return chain_rows, chain_headers, supplemented
+    finally:
+        if own_conn:
+            conn.close()
+
+
 def merge_chain_and_batch(scheme_name: str, snapshot_id: int = 0) -> dict:
-    """从库读取 chain_data + element_batches，调 merge_rows 合并"""
+    """从库读取 chain_data + element_batches，元素补充 → merge_rows 合并"""
     import json as _json
 
     chain_rows, chain_headers = [], []
@@ -1185,5 +1267,12 @@ def merge_chain_and_batch(scheme_name: str, snapshot_id: int = 0) -> dict:
                 d2 = _json.loads(r2["data_json"])
                 batch_rows = d2.get("rows", [])
                 batch_headers = d2.get("headers", [])
+
+            # ── 元素补充：用注册元素对快照 HTML 补充链数据空洞 ──
+            chain_rows, chain_headers, sup_count = _supplement_elements(
+                chain_rows, chain_headers, snapshot_id, conn=db
+            )
+            if sup_count:
+                logger.info(f"[元素补充] {sup_count} 个字段已补到链数据 (snapshot={snapshot_id})")
 
     return merge_rows(chain_rows, chain_headers, batch_rows, batch_headers)
