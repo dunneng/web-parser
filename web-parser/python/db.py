@@ -1187,11 +1187,10 @@ def _supplement_elements(chain_rows: list[dict], chain_headers: list[str],
             return chain_rows, chain_headers, 0
         snap_html = html_row["html"]
 
-        # 取该快照下关联的注册元素（有 clean_selector 的）
+        # 取所有注册元素（有 clean_selector 的，跨页通用不按 snapshot_id 过滤）
         elems = conn.execute(
             "SELECT clean_selector, text_content, selector FROM elements "
-            "WHERE snapshot_id=? AND clean_selector!=''",
-            (snapshot_id,)
+            "WHERE clean_selector!=''",
         ).fetchall()
         if not elems:
             return chain_rows, chain_headers, 0
