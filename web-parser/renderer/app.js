@@ -6596,8 +6596,7 @@ async function registerElements() {
       name: schemaName.value.trim() || Parser.state.schemaCurrentName || '',
       delimiter: Parser.state.globalMultiDelim,
       childDelimiter: Parser.state.globalChildDelim,
-      fields: fields,
-      auto_ingest: !!(document.getElementById('chkAutoIngest') || {}).checked,
+      fields: fields
     };
   }
 
@@ -6605,10 +6604,6 @@ async function registerElements() {
   function applySchemaToUI(schema) {
     Parser.state.schemaCurrentName = schema.name || '';
     schemaName.value = schema.name || '';
-
-    // 自动入库比价勾选框
-    var cb = document.getElementById('chkAutoIngest');
-    if (cb) cb.checked = !!(schema.auto_ingest);
 
 
     // 检查是否为链路模式方案
@@ -7636,19 +7631,9 @@ async function registerElements() {
     var currentScheme = schemeSel.value;
     var schemes = Parser.state.chainSchemes || [];
     schemeSel.innerHTML = '<option value="">方案</option>';
-
-    // 入库比价按钮：勾选了 auto_ingest 的方案才显示
+    // 入库按钮始终可见
     var ingestBtn = document.getElementById('btnIngestPriceCompare');
-    if (ingestBtn) {
-      var show = false;
-      var activeName = schemeSel.value || '';
-      var activeScheme = activeName ? schemes.find(function(s) { return s.name === activeName; }) : null;
-      if (!activeScheme && Parser.state._currentChainSchemeName) {
-        activeScheme = schemes.find(function(s) { return s.name === Parser.state._currentChainSchemeName; });
-      }
-      show = activeScheme && activeScheme.schema && activeScheme.schema.auto_ingest;
-      ingestBtn.style.display = show ? '' : 'none';
-    }
+    if (ingestBtn) ingestBtn.style.display = '';
     schemes.forEach(function(s) {
       var sel = (s.name === currentScheme) ? ' selected' : '';
       schemeSel.innerHTML += '<option value="' + escapeHtml(s.name) + '"' + sel + '>' + escapeHtml(s.name) + '</option>';
@@ -10622,8 +10607,7 @@ async function registerElements() {
       chainType: chainType,
       deepestSelector: deepestSelector,
       chainSegments: JSON.parse(JSON.stringify(Parser.state.chainSegments)),
-      fields: fields,
-      auto_ingest: !!(document.getElementById('chkAutoIngest') || {}).checked,
+      fields: fields
     };
   }
 
