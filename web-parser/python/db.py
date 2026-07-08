@@ -1202,13 +1202,24 @@ def _supplement_elements(chain_rows: list[dict], chain_headers: list[str],
             return chain_rows, chain_headers, 0
 
         supplemented = 0
+        import re as _re
+        _col_counter = {}  # 同名列加序号
         for elem in elems:
             sel = elem["clean_selector"]
-            col_name = elem["text_content"] or ""
-            if not col_name:
-                # 从 selector 末段推导列名
-                segs = sel.split(">")
-                col_name = segs[-1].strip() if segs else sel.strip()
+            # 从选择器末段推导列名（不用 text_content — 那是数据值不是列名）
+            segs = sel.split(">")
+            raw_name = segs[-1].strip() if segs else sel.strip()
+            # 清理伪类(:nth-of-type) 和 属性选择器([id=xxx])
+            raw_name = _re.sub(r':[^(]+(\([^)]*\))?', '', raw_name)
+            raw_name = _re.sub(r'\[[^\]]*\]', '', raw_name)
+            raw_name = raw_name.strip() or sel.strip()
+            # 处理重复列名: 加序号后缀 (如 a, a_2, a_3)
+            if raw_name in _col_counter:
+                _col_counter[raw_name] += 1
+                col_name = f"{raw_name}_{_col_counter[raw_name]}"
+            else:
+                _col_counter[raw_name] = 1
+                col_name = raw_name
 
             try:
                 els = doc.cssselect(sel)
