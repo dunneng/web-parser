@@ -1705,6 +1705,8 @@ async function registerElements() {
     }
     var exportBtn = document.getElementById('btnExportQuery');
     if (exportBtn) exportBtn.addEventListener('click', exportToExcel);
+    var ingestBtn = document.getElementById('btnIngestPriceCompare');
+    if (ingestBtn) _bindIngestPriceCompareBtn();
     var delimEl = document.getElementById('globalChildDelim');
     if (delimEl) {
       delimEl.addEventListener('change', function () {
