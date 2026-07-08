@@ -1167,8 +1167,10 @@ def merge_rows(chain_rows: list[dict], chain_headers: list[str],
 
 
 def _supplement_elements(chain_rows: list[dict], chain_headers: list[str],
-                         snapshot_id: int, conn=None) -> tuple[list[dict], list[str], int]:
+                         snapshot_id: int, batch_headers: list[str] = None,
+                         conn=None) -> tuple[list[dict], list[str], int]:
     """用注册元素的选择器对快照 HTML 做 CSS 提取，作为独立数据源加入链数据。
+    只补充 element_batches 中已有的元素（batch_headers 白名单），避免泛滥。
     注册元素的值无条件写入，不判断链路是否已有值——二者平级，冲突由后续 merge 阶段处理。
     返回 (rows, headers, supplemented_field_count)
     """
@@ -1187,11 +1189,17 @@ def _supplement_elements(chain_rows: list[dict], chain_headers: list[str],
             return chain_rows, chain_headers, 0
         snap_html = html_row["html"]
 
-        # 取所有注册元素（有 clean_selector 的，跨页通用不按 snapshot_id 过滤）
-        elems = conn.execute(
-            "SELECT clean_selector, text_content, selector FROM elements "
-            "WHERE clean_selector!=''",
-        ).fetchall()
+        # 只取 batch 中已有的元素（白名单过滤）
+        if batch_headers:
+            placeholders = ",".join(["?"] * len(batch_headers))
+            elems = conn.execute(
+                f"SELECT clean_selector, text_content, selector FROM elements "
+                f"WHERE clean_selector IN ({placeholders})",
+                batch_headers,
+            ).fetchall()
+        else:
+            # 无白名单 → 跳过补充（不泛滥）
+            return chain_rows, chain_headers, 0
         if not elems:
             return chain_rows, chain_headers, 0
 
@@ -1278,7 +1286,7 @@ def merge_chain_and_batch(scheme_name: str, snapshot_id: int = 0) -> dict:
 
             # ── 元素补充：用注册元素对快照 HTML 补充链数据空洞 ──
             chain_rows, chain_headers, sup_count = _supplement_elements(
-                chain_rows, chain_headers, snapshot_id, conn=db
+                chain_rows, chain_headers, snapshot_id, batch_headers=batch_headers, conn=db
             )
             if sup_count:
                 logger.info(f"[元素补充] {sup_count} 个字段已补到链数据 (snapshot={snapshot_id})")
