@@ -899,6 +899,12 @@ def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[
 
     import re as _re2
 
+    def _filter_empty(rows: list[dict], headers: list[str]) -> list[dict]:
+        """过滤全空行：所有非来源URL列都为空"""
+        return [r for r in rows if any(
+            r.get(h) for h in headers if h != "来源URL"
+        )]
+
     def _find_link_col(headers: list[str]) -> str:
         """从 headers 中找到链接列：优先匹配 链接/link，其次 url/href"""
         for h in headers:
@@ -911,7 +917,7 @@ def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[
 
     if len(scheme_results) == 1:
         name, rows, headers = scheme_results[0]
-        return {"rows": rows, "headers": headers, "totalRows": len(rows)}
+        return {"rows": _filter_empty(rows, headers), "headers": headers, "totalRows": len(rows)}
 
     if len(scheme_results) >= 2:
         # ── 逐级横向合并：每步从上一个方案的 headers 中自动检测链接列 ──
@@ -959,7 +965,7 @@ def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[
                 for h in next_headers:
                     if h != next_link:
                         br[name_map[h]] = match[h] if (match and h in match) else ""
-        return {"rows": merged_rows, "headers": all_headers, "totalRows": len(merged_rows)}
+        return {"rows": _filter_empty(merged_rows, all_headers), "headers": all_headers, "totalRows": len(merged_rows)}
 
     # ── 垂直拼接（只有一个方案）──
     for name, rows, headers in scheme_results:
@@ -971,7 +977,7 @@ def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[
             for h in all_headers:
                 merged[h] = r.get(h, "")
             all_rows.append(merged)
-    return {"rows": all_rows, "headers": all_headers, "totalRows": len(all_rows)}
+    return {"rows": _filter_empty(all_rows, all_headers), "headers": all_headers, "totalRows": len(all_rows)}
 
 
 def merge_schemes_vertical(scheme_names: list[str]) -> dict:
@@ -1000,6 +1006,10 @@ def merge_schemes_vertical(scheme_names: list[str]) -> dict:
                 if h not in all_headers:
                     all_headers.append(h)
 
+    # 过滤全空行
+    all_rows = [r for r in all_rows if any(
+        r.get(h) for h in all_headers if h != "来源URL"
+    )]
     return {"rows": all_rows, "headers": all_headers, "totalRows": len(all_rows)}
 
 
@@ -1163,6 +1173,10 @@ def merge_rows(chain_rows: list[dict], chain_headers: list[str],
             order.append(row_key)
 
     rows = [merged[k] for k in order]
+    # 过滤全空行：所有非来源URL列都为空的行没有意义
+    rows = [r for r in rows if any(
+        r.get(h) for h in all_headers if h != "来源URL"
+    )]
     return {"rows": rows, "headers": all_headers, "totalRows": len(rows)}
 
 
