@@ -1153,6 +1153,7 @@ if (document.documentElement.getAttribute('data-v') !== '2') {
         </button>
         <span id="importFileName" style="font-size:11px;color:var(--text-secondary);align-self:center;flex:2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
         <button id="btnClearImportFile" class="btn-clear-file" style="display:none" title="取消选择">✕</button>
+        <button id="btnDownloadSample" class="btn-secondary" style="font-size:11px;padding:6px 12px;white-space:nowrap" title="下载示例 CSV 文件">📥 示例</button>
       </div>
       <div style="font-size:10px;color:var(--text-secondary);opacity:0.5;margin-top:4px">支持 CSV、Excel (.xlsx/.xls)、JSON、SQLite (.db/.sqlite)</div>
     </div>
@@ -1942,12 +1943,29 @@ let importFile = null;
 // 打开/关闭批量入库弹窗
 $('#btnOpenBatchImport').addEventListener('click', () => {
   $('#batchImportModal').classList.add('show');
+  loadTemplates();
 });
 $('#btnBatchImportClose').addEventListener('click', () => {
   $('#batchImportModal').classList.remove('show');
 });
 $('#batchImportModal').addEventListener('click', e => {
   if (_didClickOverlay(e, $('#batchImportModal'))) $('#batchImportModal').classList.remove('show');
+});
+
+// 下载示例文件
+$('#btnDownloadSample').addEventListener('click', async () => {
+  try {
+    const a = document.createElement('a');
+    a.href = API + '/sample-import-file';
+    a.download = '比价批量入库_示例.csv';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    toast('示例文件下载中...');
+  } catch (e) {
+    toast('下载失败: ' + e.message);
+  }
 });
 
 async function loadTemplates() {

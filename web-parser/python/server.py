@@ -1571,6 +1571,83 @@ def _parse_upload(file_bytes: bytes, filename: str) -> list[dict]:
 # ═══════════════════════════════════════════════
 # 导入入库
 # ═══════════════════════════════════════════════
+
+SAMPLE_CSV_FIELDS = [
+    "platform", "platform_url", "title", "price", "original_price",
+    "shop_name", "main_image_url", "stock_info", "shipping",
+    "description", "attrs_json", "image_urls", "skus",
+]
+
+SAMPLE_CSV_ROWS = [
+    {
+        "platform": "taobao",
+        "platform_url": "https://item.taobao.com/item.htm?id=12345678901",
+        "title": "夏季新款纯棉T恤 男女同款 宽松短袖",
+        "price": "59.9",
+        "original_price": "129",
+        "shop_name": "潮流服饰旗舰店",
+        "main_image_url": "https://img.alicdn.com/example/main.jpg",
+        "stock_info": "库存 5000+",
+        "shipping": "包邮",
+        "description": "100%精梳棉，舒适透气，不起球不褪色",
+        "attrs_json": '{"品牌":"潮流服饰","材质":"纯棉","尺码":"M,L,XL"}',
+        "image_urls": '["https://img.alicdn.com/example/1.jpg","https://img.alicdn.com/example/2.jpg"]',
+        "skus": '[{"color":"黑色","size":"M","price":59.9},{"color":"白色","size":"L","price":69.9}]',
+    },
+    {
+        "platform": "jd",
+        "platform_url": "https://item.jd.com/9876543210.html",
+        "title": "无线蓝牙耳机 主动降噪 超长续航",
+        "price": "199",
+        "original_price": "399",
+        "shop_name": "数码科技专营店",
+        "main_image_url": "https://img.jd.com/example/main.jpg",
+        "stock_info": "库存 1200+",
+        "shipping": "京东物流·次日达",
+        "description": "蓝牙5.3，ANC主动降噪，续航40小时",
+        "attrs_json": '{"品牌":"数码科技","型号":"ANC-Pro","颜色":"黑色"}',
+        "image_urls": '["https://img.jd.com/example/1.jpg","https://img.jd.com/example/2.jpg"]',
+        "skus": '[{"color":"黑色","price":199},{"color":"白色","price":219}]',
+    },
+    {
+        "platform": "pdd",
+        "platform_url": "https://mobile.yangkeduo.com/goods.html?goods_id=555666777",
+        "title": "厨房置物架 多层收纳架 微波炉架子",
+        "price": "29.9",
+        "original_price": "89",
+        "shop_name": "居家好物小店",
+        "main_image_url": "https://img.pdd.com/example/main.jpg",
+        "stock_info": "库存 8000+",
+        "shipping": "包邮·48小时发货",
+        "description": "加厚碳钢材质，承重200斤，免打孔安装",
+        "attrs_json": '{"材质":"碳钢","层数":"4层","颜色":"黑色"}',
+        "image_urls": '["https://img.pdd.com/example/1.jpg"]',
+        "skus": '[]',
+    },
+]
+
+
+@app.get("/api/price-compare/sample-import-file")
+async def download_sample_import_file():
+    """返回批量入库示例 CSV 文件"""
+    buf = io.StringIO()
+    # UTF-8 BOM 确保 Excel 正确识别中文
+    buf.write("\ufeff")
+    writer = csv.writer(buf)
+    writer.writerow(SAMPLE_CSV_FIELDS)
+    for row in SAMPLE_CSV_ROWS:
+        writer.writerow([row.get(f, "") for f in SAMPLE_CSV_FIELDS])
+
+    csv_bytes = buf.getvalue().encode("utf-8")
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": "attachment; filename*=UTF-8''%E6%AF%94%E4%BB%B7%E6%89%B9%E9%87%8F%E5%85%A5%E5%BA%93_%E7%A4%BA%E4%BE%8B.csv"
+        },
+    )
+
+
 @app.post("/api/price-compare/preview")
 async def preview_import(file: UploadFile = File(...), template_name: str = Form("")):
     """预览：上传文件 + 指定模板 → 返回前 N 行映射结果"""
