@@ -1012,6 +1012,9 @@ ipcMain.handle('popup:open-tab', async (event, url) => {
     win.__pendingURLs = win.__pendingURLs || [];
     win.__pendingURLs.push(url);
   }
+  // Windows 上仅 focus() 有时无法将窗口带到前台，需先 show + restore
+  if (win.isMinimized()) win.restore();
+  win.show();
   win.focus();
   return { ok: true };
 });
@@ -1038,6 +1041,8 @@ app.on('web-contents-created', (event, contents) => {
         win.__pendingURLs = win.__pendingURLs || [];
         win.__pendingURLs.push(url);
       }
+      if (win.isMinimized()) win.restore();
+      win.show();
       win.focus();
     }
     return { action: 'deny' };

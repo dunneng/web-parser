@@ -879,6 +879,8 @@ ipcMain.handle('popup:open-tab', async (event, url) => {
     win.__pendingURLs = win.__pendingURLs || [];
     win.__pendingURLs.push(url);
   }
+  if (win.isMinimized()) win.restore();
+  win.show();
   win.focus();
   return { ok: true };
 });
@@ -905,6 +907,8 @@ app.on('web-contents-created', (event, contents) => {
         win.__pendingURLs = win.__pendingURLs || [];
         win.__pendingURLs.push(url);
       }
+      if (win.isMinimized()) win.restore();
+      win.show();
       win.focus();
     }
     return { action: 'deny' };

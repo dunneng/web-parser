@@ -1116,9 +1116,11 @@ window.Parser = window.Parser || {};
           val = item[k] !== undefined ? item[k] : '';
         }
         var display = typeof val === 'object' ? JSON.stringify(val) : String(val);
-        var isUrl = /^(https?:\/\/)[^\s]+$/i.test(display);
+        // trim 后再测 URL，防止前后空格导致 isUrl 误判（进而丢失 data-url 属性，Ctrl+点击失效）
+        var trimmed = display.trim();
+        var isUrl = /^(https?:\/\/)[^\s]+$/i.test(trimmed);
         var basicCols = ['序号','标签','来源','文本/链接','CSS选择器','XPath','匹配数','文本','链接','选择器'];
-        var urlData = isUrl ? ' data-url="' + escapeHtml(display) + '"' : '';
+        var urlData = isUrl ? ' data-url="' + escapeHtml(trimmed) + '"' : '';
         var urlCls = isUrl ? ' cell-url' : '';
         var urlStyle = isUrl ? 'color:var(--accent);text-decoration:underline;cursor:pointer;' : '';
         if (basicCols.indexOf(k) !== -1) {
@@ -1135,18 +1137,21 @@ window.Parser = window.Parser || {};
     html += '</tbody></table>';
     document.getElementById("queryResults").innerHTML = html;
 
-    // 绑定 Ctrl+点击跳转链接（委托模式，支持跨单元格）
-    document.getElementById("queryResults").addEventListener('click', function(e) {
-      if (!e.ctrlKey && !e.metaKey) return;
-      var cell = e.target.closest('td'); if (!cell) return;
-      var url = cell.dataset.url; if (!url) return;
-      e.preventDefault();
-      if (window.api && window.api.openPopupTab) {
-        window.api.openPopupTab(url);
-      } else {
-        window.open(url, '_blank');
-      }
-    });
+    // 绑定 Ctrl+点击跳转链接（委托模式，支持跨单元格）—— 仅首次绑定
+    if (!Parser._queryClicksBound) {
+      Parser._queryClicksBound = true;
+      document.getElementById("queryResults").addEventListener('click', function(e) {
+        if (!e.ctrlKey && !e.metaKey) return;
+        var cell = e.target.closest('td'); if (!cell) return;
+        var url = cell.dataset.url; if (!url) return;
+        e.preventDefault();
+        if (window.api && window.api.openPopupTab) {
+          window.api.openPopupTab(url);
+        } else {
+          window.open(url, '_blank');
+        }
+      });
+    }
 
     // 绑定标签头点击
     document.getElementById("queryResults").querySelectorAll('.query-tag-header').forEach(function(h) {
