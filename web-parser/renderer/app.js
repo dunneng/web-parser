@@ -10881,6 +10881,18 @@ async function registerElements() {
         if (cn) cn.value = '';
         if (schemaName) schemaName.value = '';
 
+        // 列表模式：记录当前页面 URL，供详情模式自动合并使用
+        if (Parser.state._ruleMode !== 'detail' && schema) {
+          try {
+            var curUrl = document.getElementById('webview').getURL();
+            if (curUrl && curUrl !== 'about:blank') {
+              schema._listPageUrl = curUrl;
+              Parser.state._listPageUrl = curUrl;
+              saveChainSchemesToStorage();
+            }
+          } catch(e) {}
+        }
+
         // ── 查询 ──
         // 链路模式：提取刚保存/勾选的链路方案；手动模式：只提取当前手动 schema
         var checked;
