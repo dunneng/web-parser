@@ -7631,9 +7631,6 @@ async function registerElements() {
     var currentScheme = schemeSel.value;
     var schemes = Parser.state.chainSchemes || [];
     schemeSel.innerHTML = '<option value="">方案</option>';
-    // 入库按钮始终可见
-    var ingestBtn = document.getElementById('btnIngestPriceCompare');
-    if (ingestBtn) ingestBtn.style.display = '';
     schemes.forEach(function(s) {
       var sel = (s.name === currentScheme) ? ' selected' : '';
       schemeSel.innerHTML += '<option value="' + escapeHtml(s.name) + '"' + sel + '>' + escapeHtml(s.name) + '</option>';
@@ -7707,11 +7704,8 @@ async function registerElements() {
     if (!btn || btn._bound) return;
     btn._bound = true;
     btn.addEventListener('click', async function() {
-      // 确定当前方案名
-      var schemeSel = document.getElementById('secScheme');
-      var name = schemeSel ? schemeSel.value : '';
-      if (!name && Parser.state._currentChainSchemeName) name = Parser.state._currentChainSchemeName;
-      if (!name) { setStatus('未找到当前方案'); return; }
+      var name = Parser.state._currentChainSchemeName || '';
+      if (!name) { setStatus('请先执行链路提取获取数据'); return; }
       btn.disabled = true; btn.textContent = '入库中...';
       try {
         var resp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/price-compare/ingest-from-chain', {
@@ -10846,6 +10840,8 @@ async function registerElements() {
         try { var sl2 = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list');
           if (sl2.ok) { var sd2 = await sl2.json(); snapList2 = sd2.snapshots || []; } } catch(e) {}
         var snapId2 = snapList2.length > 0 ? snapList2[0].id : 0;
+        // 记录当前方案名（供入库按钮使用）
+        if (checked.length > 0) Parser.state._currentChainSchemeName = checked[0].name;
         for (var si = 0; si < allResults.length && si < checked.length; si++) {
           try {
             await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/save', {
