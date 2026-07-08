@@ -39,7 +39,19 @@
       {
         "from": "python",
         "to": "python",
-        "filter": ["**/*", "!dist/**", "!build/**", "!__pycache__/**", "!data/**", "!cookies/**", "!models/**", "!wheels/**", "!static/**", "!python-backend/_internal/**", "!*.spec"]
+        "filter": [
+          "**/*",
+          "!dist/**",
+          "!build/**",
+          "!__pycache__/**",
+          "!data/**",
+          "!cookies/**",
+          "!models/**",
+          "!wheels/**",
+          "!static/**",
+          "!python-backend/_internal/**",
+          "!*.spec"
+        ]
       }
     ],
     "win": {
@@ -53,6 +65,7 @@
   },
   "devDependencies": {
     "electron": "^42.0.1",
-    "electron-builder": "latest"
+    "electron-builder": "latest",
+    "electron-packager": "^17.1.2"
   }
 }
