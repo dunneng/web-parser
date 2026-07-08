@@ -8060,27 +8060,11 @@ async function registerElements() {
     var data;
 
     if (isVertical) {
-      // 纵向合并：逐个方案取数据，追加行，取并集列
-      var allRows = [], allHeaders = [];
-      for (var ci = 0; ci < checked.length; ci++) {
-        var singleUrl = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + encodeURIComponent(checked[ci].name) + '&_=' + Date.now();
-        try {
-          var sr = await fetch(singleUrl, { signal: _chainFetchAbort ? _chainFetchAbort.signal : undefined });
-          var sd = await sr.json();
-          if (sd.rows && sd.rows.length > 0) {
-            var sHeaders = sd.headers || [];
-            sd.rows.forEach(function(row) {
-              var newRow = {};
-              sHeaders.forEach(function(h) { newRow[h] = row[h] || ''; });
-              allRows.push(newRow);
-            });
-            sHeaders.forEach(function(h) {
-              if (allHeaders.indexOf(h) < 0) allHeaders.push(h);
-            });
-          }
-        } catch(e) { if (e.name === 'AbortError') throw e; }
-      }
-      data = { rows: allRows, headers: allHeaders, totalRows: allRows.length };
+      // 纵向合并：后端 merge_schemes_vertical
+      var names2 = checked.map(function(s) { return encodeURIComponent(s.name); }).join(',');
+      var vUrl2 = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + names2 + '&mode=vertical';
+      var vr = await fetch(vUrl2, { signal: _chainFetchAbort ? _chainFetchAbort.signal : undefined });
+      data = await vr.json();
     } else {
       var names = checked.map(function(s) { return encodeURIComponent(s.name); }).join(',');
       var linkCols = checked.map(function(s) { return (s.schema && s.schema._exportLinkCol) || ''; });
@@ -10935,23 +10919,13 @@ async function registerElements() {
         var isVert = Parser.state._chainMergeMode === 'vertical' && checked.length >= 2;
         var mergedRows = [], allHeaders = [];
         if (isVert) {
-          // 纵向合并：逐个方案读DB，追加行，取并集列
-          for (var vi = 0; vi < checked.length; vi++) {
-            var vUrl = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + encodeURIComponent(checked[vi].name);
-            var vResp = await fetch(vUrl);
-            var vData = await vResp.json();
-            if (vData.rows && vData.rows.length > 0) {
-              var vHeaders = vData.headers || [];
-              vData.rows.forEach(function(r) {
-                var nr = {};
-                vHeaders.forEach(function(h) { nr[h] = r[h] || ''; });
-                mergedRows.push(nr);
-              });
-              vHeaders.forEach(function(h) {
-                if (allHeaders.indexOf(h) < 0) allHeaders.push(h);
-              });
-            }
-          }
+          // 纵向合并：后端 merge_schemes_vertical
+          var names3 = checked.map(function(s) { return encodeURIComponent(s.name); }).join(',');
+          var vUrl3 = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + names3 + '&mode=vertical';
+          var vResp3 = await fetch(vUrl3);
+          var vData3 = await vResp3.json();
+          mergedRows = vData3.rows || [];
+          allHeaders = vData3.headers || [];
         } else {
           // 使用各方案导出时的 _exportLinkCol；兜底取 footer 下拉值
           var linkCols = checked.map(function(s) { return (s.schema && s.schema._exportLinkCol) || ''; });

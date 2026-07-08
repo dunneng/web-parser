@@ -967,6 +967,35 @@ def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[
     return {"rows": all_rows, "headers": all_headers, "totalRows": len(all_rows)}
 
 
+def merge_schemes_vertical(scheme_names: list[str]) -> dict:
+    """纵向合并：多个方案行直接追加，列取并集"""
+    import json as _json
+    all_rows = []
+    all_headers = []
+
+    with get_db() as db:
+        for name in scheme_names:
+            r = db.execute(
+                "SELECT data_json FROM chain_data WHERE scheme_name=?",
+                (name,),
+            ).fetchone()
+            if not r:
+                continue
+            d = _json.loads(r["data_json"])
+            headers = d.get("headers", [])
+            rows = d.get("rows", [])
+            for row in rows:
+                nr = {}
+                for h in headers:
+                    nr[h] = row.get(h, "")
+                all_rows.append(nr)
+            for h in headers:
+                if h not in all_headers:
+                    all_headers.append(h)
+
+    return {"rows": all_rows, "headers": all_headers, "totalRows": len(all_rows)}
+
+
 def delete_chain_data(scheme_name: str) -> dict:
     """删除某个方案的数据"""
     with get_db() as db:
