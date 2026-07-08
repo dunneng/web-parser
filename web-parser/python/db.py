@@ -1108,8 +1108,8 @@ def merge_rows(chain_rows: list[dict], chain_headers: list[str],
     if not chain_rows and not batch_rows:
         return {"rows": [], "headers": [], "totalRows": 0}
 
-    # 只输出链列（批量列不追加到表头）
-    all_headers = list(chain_headers)
+    # 只输出链列（链列为空时用批量列）
+    all_headers = list(chain_headers) if chain_headers else list(batch_headers)
 
     # 补全列（双源都补）
     for row in chain_rows:

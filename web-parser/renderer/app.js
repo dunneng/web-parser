@@ -7993,49 +7993,8 @@ async function registerElements() {
       }
 
       var data = { rows: mergedRows, headers: allHeaders, totalRows: mergedRows.length };
-      // 批量注册兜底
-      try {
-        var snapUrl2 = (checked.length > 0 && allResults.length > 0) ? (snapList[0] ? snapList[0].url : '') : '';
-        if (snapUrl2) {
-          var batchResp2 = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch?url=' + encodeURIComponent(snapUrl2));
-          if (batchResp2.ok) {
-            var batchData2 = (await batchResp2.json()).data;
-            if (batchData2 && batchData2.rows && batchData2.rows.length > 0) {
-              // 合并列：同名填空，不同名追加
-              (batchData2.headers || []).forEach(function(h) { if (allHeaders.indexOf(h) < 0) allHeaders.push(h); });
-              if (batchData2.rows.length > mergedRows.length) {
-                for (var bj = mergedRows.length; bj < batchData2.rows.length; bj++) {
-                  var pRow = {};
-                  (batchData2.headers || []).forEach(function(h) { pRow[h] = batchData2.rows[bj][h] || ''; });
-                  mergedRows.push(pRow);
-                }
-              }
-              for (var rk = 0; rk < Math.min(mergedRows.length, batchData2.rows.length); rk++) {
-                (batchData2.headers || []).forEach(function(h) {
-                  if (!mergedRows[rk][h]) mergedRows[rk][h] = batchData2.rows[rk][h] || '';
-                });
-              }
-                                    // 跨列合并：链列和批量列各只有1列时自动合并
-                  var nBatchCols = (batchData.headers || []).filter(function(h) { return mergedHeaders.indexOf(h) >= 0; }).length;
-                  var nChainCols = mergedHeaders.length - nBatchCols;
-                  if (nChainCols === 1 && nBatchCols === 1) {
-                    var chCol = mergedHeaders.filter(function(h) { return (batchData.headers || []).indexOf(h) < 0; })[0];
-                    var bhCol = (batchData.headers || []).filter(function(h) { return mergedHeaders.indexOf(h) >= 0; })[0];
-                    if (chCol && bhCol) {
-                      for (var mi = 0; mi < batchData.rows.length; mi++) {
-                        if (mi < mergedRows.length && !mergedRows[mi][chCol]) mergedRows[mi][chCol] = batchData.rows[mi][bhCol] || '';
-                      }
-                      mergedHeaders.splice(mergedHeaders.indexOf(bhCol), 1);
-                      mergedRows.forEach(function(r) { delete r[bhCol]; });
-                    }
-                  }
-                  data.totalRows = mergedRows.length;
-              data.headers = allHeaders;
-              data.rows = mergedRows;
-            }
-          }
-        }
-      } catch(e) {}
+          // 批量数据已由后端合并处理
+      
 
       Parser.state.schemaPreviewData = data;
       renderModalPreviewTable(data);
@@ -8084,61 +8043,7 @@ async function registerElements() {
       }
     }
 
-    // 批量注册兜底
-    try {
-      var refUrl = (checked.length > 0 && checked[0].schema && checked[0].schema._listPageUrl) || '';
-      // 回退：从快照列表取第一页 URL
-      if (!refUrl) {
-        try {
-          var slR = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list');
-          if (slR.ok) {
-            var slD = await slR.json();
-            var snaps2 = slD.snapshots || [];
-            if (snaps2.length > 0) refUrl = snaps2[0].url;
-          }
-        } catch(e2) {}
-      }
-      if (refUrl) {
-        var br = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch?url=' + encodeURIComponent(refUrl));
-        if (br.ok) {
-          var bd = (await br.json()).data;
-          if (bd && bd.rows && bd.rows.length > 0) {
-            var dh = data.headers || [], dr = data.rows || [];
-            // 补列头
-            (bd.headers || []).forEach(function(h) { if (dh.indexOf(h) < 0) dh.push(h); });
-            // 补行
-            if (bd.rows.length > dr.length) {
-              for (var pi = dr.length; pi < bd.rows.length; pi++) {
-                var pr2 = {};
-                (bd.headers || []).forEach(function(h) { pr2[h] = bd.rows[pi][h] || ''; });
-                dr.push(pr2);
-              }
-            }
-            // 填空列
-            for (var mi = 0; mi < Math.min(dr.length, bd.rows.length); mi++) {
-              (bd.headers || []).forEach(function(h) {
-                if (!dr[mi][h]) dr[mi][h] = bd.rows[mi][h] || '';
-              });
-            }
-            // 跨列合并：批量列直接填进第一个非meta数据列
-            var bHdr = (bd.headers || [])[0];
-            var cHdr = dh.filter(function(h) { return h !== '来源URL' && h.charAt(0) !== '_' && h !== bHdr; })[0];
-            _debugLog('[跨列合并] bHdr=' + (bHdr||'') + ' cHdr=' + (cHdr||'') + ' dhLen=' + dh.length + ' drLen=' + dr.length);
-            if (bHdr && cHdr) {
-              _debugLog('[跨列合并] 填充中... bdRows=' + bd.rows.length);
-              for (var mi3 = 0; mi3 < bd.rows.length; mi3++) {
-                if (mi3 < dr.length && !dr[mi3][cHdr]) dr[mi3][cHdr] = bd.rows[mi3][bHdr] || '';
-              }
-              var di3 = dh.indexOf(bHdr);
-              if (di3 >= 0) dh.splice(di3, 1);
-              dr.forEach(function(r) { delete r[bHdr]; });
-              _debugLog('[跨列合并] 完成 dhLen=' + dh.length);
-            }
-            data.totalRows = dr.length;
-          }
-        }
-      }
-    } catch(e) {}
+    // 批量数据已由后端合并处理
 
     if (!data.rows || data.rows.length === 0) {
       previewWrap.innerHTML = '<div class="tree-empty">该方案暂无数据</div>';
@@ -9482,7 +9387,6 @@ async function registerElements() {
         if (!node.extractions) node.extractions = [];
         node.extractions.push({ attr: '', name: '' });
         renderChainEditor(path);
-        renderChainTree();
         autoRefreshChainPreview();
       });
     });
@@ -9752,7 +9656,6 @@ async function registerElements() {
       btn.addEventListener('click', function() {
         var sci = parseInt(this.dataset.sidx);
         if (node.subChains) { node.subChains.splice(sci, 1); }
-        renderChainTree();
         renderChainEditor(path);
         autoRefreshChainPreview();
       });
