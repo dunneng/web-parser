@@ -1168,8 +1168,8 @@ def merge_rows(chain_rows: list[dict], chain_headers: list[str],
 
 def _supplement_elements(chain_rows: list[dict], chain_headers: list[str],
                          snapshot_id: int, conn=None) -> tuple[list[dict], list[str], int]:
-    """用注册元素的选择器对快照 HTML 做 CSS 提取，补充链路结果空洞。
-    快照优先：链提取已有值不动，仅补空洞。
+    """用注册元素的选择器对快照 HTML 做 CSS 提取，作为独立数据源加入链数据。
+    注册元素的值无条件写入，不判断链路是否已有值——二者平级，冲突由后续 merge 阶段处理。
     返回 (rows, headers, supplemented_field_count)
     """
     if not snapshot_id or not chain_rows:
@@ -1227,11 +1227,9 @@ def _supplement_elements(chain_rows: list[dict], chain_headers: list[str],
             if col_name not in chain_headers:
                 chain_headers.append(col_name)
 
-            # 按索引补空洞（快照优先：已有值不动）
+            # 按索引逐行写入，无条件覆盖（冲突由后续 merge 处理）
             for i in range(min(len(chain_rows), len(vals))):
-                row = chain_rows[i]
-                if not row.get(col_name):
-                    row[col_name] = vals[i]
+                chain_rows[i][col_name] = vals[i]
 
             supplemented += 1
 
