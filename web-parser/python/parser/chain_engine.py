@@ -10,7 +10,7 @@ from .css_engine import get_child_text, get_direct_text, _truncate
 
 def _walk_sub_chain(el, sub_chain: dict):
     """递归走进子链路树，返回最终目标元素（1:1 取首个匹配）"""
-    if not sub_chain or not el:
+    if not sub_chain or el is None:
         return el
 
     sub_sel = sub_chain.get('selector', '')
