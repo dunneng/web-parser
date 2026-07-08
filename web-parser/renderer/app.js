@@ -789,6 +789,7 @@ async function registerElements() {
     Parser.extractor.bindEnhancedPickerEvents();
     bindSchemaEvents();
     _bindExportLinksBtn();
+    _bindIngestPriceCompareBtn();
     // 规则模式切换
     Parser.state._ruleMode = Parser.state._ruleMode || 'list';
     var btnList = document.getElementById('btnRuleModeList');
@@ -7635,10 +7636,25 @@ async function registerElements() {
     var currentScheme = schemeSel.value;
     var schemes = Parser.state.chainSchemes || [];
     schemeSel.innerHTML = '<option value="">方案</option>';
+
+    // 入库比价按钮：勾选了 auto_ingest 的方案才显示
+    var ingestBtn = document.getElementById('btnIngestPriceCompare');
+    if (ingestBtn) {
+      var show = false;
+      var activeName = schemeSel.value || '';
+      var activeScheme = activeName ? schemes.find(function(s) { return s.name === activeName; }) : null;
+      if (!activeScheme && Parser.state._currentChainSchemeName) {
+        activeScheme = schemes.find(function(s) { return s.name === Parser.state._currentChainSchemeName; });
+      }
+      show = activeScheme && activeScheme.schema && activeScheme.schema.auto_ingest;
+      ingestBtn.style.display = show ? '' : 'none';
+    }
     schemes.forEach(function(s) {
       var sel = (s.name === currentScheme) ? ' selected' : '';
       schemeSel.innerHTML += '<option value="' + escapeHtml(s.name) + '"' + sel + '>' + escapeHtml(s.name) + '</option>';
     });
+    // 记录当前显示的方案名（供入库按钮使用）
+    Parser.state._currentChainSchemeName = schemeSel.value || '';
   }
 
   function _bindExportLinksBtn() {
@@ -7698,6 +7714,36 @@ async function registerElements() {
         if (batchPanel) batchPanel.classList.remove('hidden');
       }
       setStatus('已导出 ' + urls.length + ' 个链接到批量面板');
+    });
+  }
+
+  function _bindIngestPriceCompareBtn() {
+    var btn = document.getElementById('btnIngestPriceCompare');
+    if (!btn || btn._bound) return;
+    btn._bound = true;
+    btn.addEventListener('click', async function() {
+      // 确定当前方案名
+      var schemeSel = document.getElementById('secScheme');
+      var name = schemeSel ? schemeSel.value : '';
+      if (!name && Parser.state._currentChainSchemeName) name = Parser.state._currentChainSchemeName;
+      if (!name) { setStatus('未找到当前方案'); return; }
+      btn.disabled = true; btn.textContent = '入库中...';
+      try {
+        var resp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/price-compare/ingest-from-chain', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scheme_name: name })
+        });
+        var data = await resp.json();
+        if (data.ok) {
+          setStatus('已入库 ' + (data.ingested || 0) + ' 条商品（跳过 ' + (data.skipped || 0) + '）');
+          _debugLog('[比价入库] ' + name + ': ' + (data.ingested || 0) + '条');
+        } else {
+          setStatus('入库失败: ' + ((data.errors || [])[0] || '未知'));
+        }
+      } catch(e) {
+        setStatus('入库异常: ' + e.message);
+      }
+      btn.disabled = false; btn.textContent = '📥 入库比价';
     });
   }
 
@@ -10837,19 +10883,7 @@ async function registerElements() {
                 });
               }
             }
-            // 自动入库比价
-            if (checked[si].schema && checked[si].schema.auto_ingest) {
-              try {
-                var ir = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/price-compare/ingest-from-chain', {
-                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ scheme_name: checked[si].name })
-                });
-                if (ir.ok) {
-                  var id2 = await ir.json();
-                  _debugLog('[比价入库] ' + checked[si].name + ': ' + (id2.ingested || 0) + '条');
-                }
-              } catch(e) {}
-            }
+            // 自动入库比价 — 已移至 footer 按钮手动触发
           } catch (e) { setStatus('存库失败: ' + checked[si].name); }
         }
         if (allResults.length === 0) {
