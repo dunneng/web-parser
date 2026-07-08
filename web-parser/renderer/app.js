@@ -6595,7 +6595,8 @@ async function registerElements() {
       name: schemaName.value.trim() || Parser.state.schemaCurrentName || '',
       delimiter: Parser.state.globalMultiDelim,
       childDelimiter: Parser.state.globalChildDelim,
-      fields: fields
+      fields: fields,
+      auto_ingest: !!(document.getElementById('chkAutoIngest') || {}).checked,
     };
   }
 
@@ -6603,6 +6604,10 @@ async function registerElements() {
   function applySchemaToUI(schema) {
     Parser.state.schemaCurrentName = schema.name || '';
     schemaName.value = schema.name || '';
+
+    // 自动入库比价勾选框
+    var cb = document.getElementById('chkAutoIngest');
+    if (cb) cb.checked = !!(schema.auto_ingest);
 
 
     // 检查是否为链路模式方案
@@ -10572,6 +10577,7 @@ async function registerElements() {
       deepestSelector: deepestSelector,
       chainSegments: JSON.parse(JSON.stringify(Parser.state.chainSegments)),
       fields: fields,
+      auto_ingest: !!(document.getElementById('chkAutoIngest') || {}).checked,
     };
   }
 
@@ -10830,6 +10836,19 @@ async function registerElements() {
                   body: JSON.stringify({ scheme_name: checked[si].name, rows: md.rows, headers: md.headers })
                 });
               }
+            }
+            // 自动入库比价
+            if (checked[si].schema && checked[si].schema.auto_ingest) {
+              try {
+                var ir = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/price-compare/ingest-from-chain', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ scheme_name: checked[si].name })
+                });
+                if (ir.ok) {
+                  var id2 = await ir.json();
+                  _debugLog('[比价入库] ' + checked[si].name + ': ' + (id2.ingested || 0) + '条');
+                }
+              } catch(e) {}
             }
           } catch (e) { setStatus('存库失败: ' + checked[si].name); }
         }

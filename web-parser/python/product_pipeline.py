@@ -454,6 +454,113 @@ def get_stats() -> dict:
     }
 
 
+# ── 从链路数据入库 ──
+
+# 链 header → products 列映射（按中文/英文模糊匹配）
+_CHAIN_TO_PRODUCT_MAP = {
+    "title": ["标题", "商品名", "title", "名称", "商品标题", "产品名", "品名"],
+    "price": ["价格", "售价", "price", "到手价", "成交价", "单价", "现价"],
+    "main_image_url": ["主图", "图片", "image", "img", "商品图片", "主图URL", "主图链接", "首图"],
+    "shop_name": ["店铺", "shop", "卖家", "商家", "店铺名", "店铺名称", "店名"],
+    "platform_url": ["链接", "url", "详情", "href", "商品链接", "详情链接", "来源URL"],
+    "description": ["描述", "description", "详情", "商品描述", "介绍", "简介"],
+    "original_price": ["原价", "标价", "original_price", "市场价", "吊牌价"],
+}
+
+
+def _detect_platform(url: str) -> str:
+    """从 URL 自动识别平台"""
+    url_lower = url.lower()
+    if "taobao" in url_lower or "tmall" in url_lower:
+        return "taobao" if "taobao" in url_lower else "tmall"
+    if "jd.com" in url_lower:
+        return "jd"
+    if "pdd" in url_lower or "pinduoduo" in url_lower or "yangkeduo" in url_lower:
+        return "pdd"
+    if "1688" in url_lower or "alibaba" in url_lower:
+        return "1688"
+    return ""
+
+
+def _map_chain_row(row: dict, headers: list[str]) -> dict:
+    """将链数据的一行映射为 products 字段"""
+    result = {}
+    for prod_col, candidates in _CHAIN_TO_PRODUCT_MAP.items():
+        for h in headers:
+            h_lower = h.strip().lower()
+            for c in candidates:
+                if c.lower() in h_lower or h_lower == c.lower():
+                    val = row.get(h, "")
+                    if val:
+                        result[prod_col] = str(val).strip()
+                    break
+            if prod_col in result:
+                break
+    return result
+
+
+def ingest_from_chain_data(scheme_name: str) -> dict:
+    """从 chain_data 读取已合并的数据，映射字段后逐行入库到 products 表。
+    返回 {"ok": bool, "ingested": int, "skipped": int, "errors": [str]}
+    """
+    import json as _json
+    data = db.get_chain_data([scheme_name])
+    rows = data.get("rows", [])
+    headers = data.get("headers", [])
+
+    if not rows:
+        return {"ok": True, "ingested": 0, "skipped": 0, "errors": ["无数据"]}
+
+    ingested = 0
+    skipped = 0
+    errors = []
+
+    for row in rows:
+        prod = _map_chain_row(row, headers)
+        if not prod.get("title") and not prod.get("platform_url"):
+            skipped += 1
+            continue
+
+        url = prod.get("platform_url", "")
+        platform = prod.get("platform", "") or _detect_platform(url)
+        if not platform:
+            skipped += 1
+            errors.append(f"无法识别平台: {url[:60]}")
+            continue
+
+        try:
+            # 价格字符串转数字
+            price_str = prod.get("price", "0")
+            try:
+                price = float(re.sub(r"[^\d.]", "", str(price_str))) if price_str else 0
+            except (ValueError, TypeError):
+                price = 0
+
+            original_price_str = prod.get("original_price", "0")
+            try:
+                original_price = float(re.sub(r"[^\d.]", "", str(original_price_str))) if original_price_str else 0
+            except (ValueError, TypeError):
+                original_price = 0
+
+            db.upsert_product(
+                platform=platform,
+                platform_url=url,
+                title=prod.get("title", ""),
+                price=price,
+                original_price=original_price,
+                shop_name=prod.get("shop_name", ""),
+                main_image_url=prod.get("main_image_url", ""),
+                description=prod.get("description", ""),
+            )
+            ingested += 1
+        except Exception as e:
+            skipped += 1
+            errors.append(str(e)[:200])
+
+    logger.info(f"[比价入库] scheme={scheme_name} 成功={ingested} 跳过={skipped}")
+    return {"ok": True, "ingested": ingested, "skipped": skipped, "errors": errors}
+
+
 # ── 编辑后重建向量 ──
 
 def rebuild_product_vectors(product_id: int, skip_rembg: bool = False) -> dict:

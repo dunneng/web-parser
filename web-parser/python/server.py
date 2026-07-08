@@ -1419,6 +1419,14 @@ async def repair_platforms(data: dict = None):
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+class IngestFromChainBody(BaseModel):
+    scheme_name: str
+
+@app.post("/api/price-compare/ingest-from-chain")
+async def ingest_from_chain(body: IngestFromChainBody):
+    """从链路提取结果自动入库到比价库"""
+    return product_pipeline.ingest_from_chain_data(body.scheme_name)
+
 # ═══════════════════════════════════════════════
 # 跨页面数据桥：比价控制台 ⇄ 网页解析器 query
 # ═══════════════════════════════════════════════
