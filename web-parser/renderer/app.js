@@ -7977,6 +7977,99 @@ async function registerElements() {
     return allResults;
   }
 
+  /** 详情模式：遍历 batchUrlList 逐个加载 → 提取 → 收集 */
+  async function _extractFromDetailPages(checked) {
+    var wv = document.getElementById('webview');
+    var batchArea = document.getElementById('batchUrlList');
+    var urls = batchArea ? batchArea.value.trim().split('\n').filter(function(u) { return u.trim(); }) : [];
+    if (urls.length === 0 || checked.length === 0) return [];
+
+    // 保存当前页面 URL，完成后恢复
+    var prevUrl = '';
+    try { prevUrl = wv.getURL(); } catch(e) {}
+
+    var allResults = [];
+    for (var ci = 0; ci < checked.length; ci++) {
+      var cs = checked[ci];
+      var schema = cs.schema;
+      if (!schema || !schema.fields || schema.fields.length === 0) continue;
+      var fields = schema.fields.filter(function(f) { return f.isText || f.childText || (f.attr && f.attr.trim()); });
+      if (fields.length === 0) continue;
+
+      var result = { rows: [], headers: [], totalRows: 0, _detailUrls: urls.length };
+
+      for (var ui = 0; ui < urls.length; ui++) {
+        var url = urls[ui].trim();
+        if (!url || !/^https?:/.test(url)) continue;
+
+        setStatus('详情页提取 ' + (ui + 1) + '/' + urls.length + '…');
+        _debugLog('[详情提取] 加载 ' + url.substring(0, 60));
+
+        try {
+          // 加载页面并等待渲染
+          await new Promise(function(resolve, reject) {
+            var done = false;
+            var timeout = setTimeout(function() {
+              if (!done) { done = true; reject(new Error('timeout')); }
+            }, 30000);
+            var handler = function() {
+              if (done) return;
+              done = true;
+              wv.removeEventListener('did-finish-load', handler);
+              clearTimeout(timeout);
+              // 额外等待动态内容渲染
+              setTimeout(resolve, 2000);
+            };
+            wv.addEventListener('did-finish-load', handler);
+            wv.loadURL(url);
+          });
+        } catch(e) {
+          _debugLog('[详情提取] 加载失败: ' + url.substring(0, 60) + ' - ' + (e.message || ''));
+          continue;
+        }
+
+        try {
+          var html = await wv.executeJavaScript('document.documentElement.outerHTML');
+          if (!html) continue;
+
+          var resp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/extract/chain', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              html: html,
+              chain_type: schema.chainType || 'css',
+              deepest_selector: schema.deepestSelector || '',
+              fields: fields,
+              child_delim: schema.childDelimiter || ''
+            })
+          });
+          var pageResult = await resp.json();
+          if (pageResult && !pageResult.error && pageResult.rows) {
+            pageResult.rows.forEach(function(r) { r['来源URL'] = url; });
+            result.rows = result.rows.concat(pageResult.rows);
+            result.totalRows += pageResult.rows.length;
+            if (!result.headers.length && pageResult.headers.length) {
+              result.headers = pageResult.headers.slice();
+              if (result.headers.indexOf('来源URL') < 0) result.headers.push('来源URL');
+            }
+          }
+        } catch(e) {
+          _debugLog('[详情提取] 提取失败: ' + url.substring(0, 60) + ' - ' + (e.message || ''));
+        }
+      }
+
+      if (result.rows.length > 0) {
+        allResults.push(result);
+      }
+    }
+
+    // 恢复原页面
+    if (prevUrl && prevUrl !== 'about:blank') {
+      try { wv.loadURL(prevUrl); } catch(e) {}
+    }
+
+    return allResults;
+  }
+
   /** 多方案实时合并预览：勾选 ≥2 方案时触发 */
   async function _fetchChainMergeLive(checked) {
     var previewWrap = document.getElementById('schemaPreviewWrap');
@@ -10819,8 +10912,16 @@ async function registerElements() {
         // 清除快照缓存，确保提取最新数据
         Parser.state._snapHtmlCache = {};
         var allResults;
+        // 详情模式：遍历 batchUrlList 逐个加载提取
+        var isDetail = Parser.state._ruleMode === 'detail';
+        var batchArea = document.getElementById('batchUrlList');
+        var hasUrls = batchArea && batchArea.value.trim();
         try {
-          allResults = await _extractFromSchemas(checked);
+          if (isDetail && hasUrls && checked.length > 0) {
+            allResults = await _extractFromDetailPages(checked);
+          } else {
+            allResults = await _extractFromSchemas(checked);
+          }
         } catch (e) {
           setStatus('提取失败: ' + (e.message || ''));
           return;
@@ -10879,10 +10980,33 @@ async function registerElements() {
         }
         // 合并走 DB 缓存（保证列表用存好的数据，不受实时提取影响）
         var isVert = Parser.state._chainMergeMode === 'vertical' && checked.length >= 2;
+        // 详情模式：自动检测列表方案并加入合并
+        var querySchemes = checked.slice();
+        var queryLinkCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '';
+        var queryLinkCols = checked.map(function(s) { return (s.schema && s.schema._exportLinkCol) || ''; });
+        if (isDetail && checked.length > 0) {
+          var listScheme = (Parser.state.chainSchemes || []).find(function(s) {
+            return s.schema && s.schema._listPageUrl && s.name !== checked[0].name;
+          });
+          if (listScheme) {
+            try {
+              var testResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + encodeURIComponent(listScheme.name));
+              var testData = await testResp.json();
+              if (testData.rows && testData.rows.length > 0) {
+                querySchemes.push(listScheme);
+                if (!queryLinkCol && listScheme.schema._exportLinkCol) {
+                  queryLinkCol = listScheme.schema._exportLinkCol;
+                }
+                _debugLog('[详情合并] 自动合并列表方案: ' + listScheme.name + ' linkCol=' + queryLinkCol);
+              }
+            } catch(e) {}
+          }
+        }
         var mergedRows = [], allHeaders = [];
-        if (isVert) {
+        if (isVert && querySchemes.length >= 2) {
+
           // 纵向合并：后端 merge_schemes_vertical
-          var names3 = checked.map(function(s) { return encodeURIComponent(s.name); }).join(',');
+          var names3 = querySchemes.map(function(s) { return encodeURIComponent(s.name); }).join(',');
           var vUrl3 = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + names3 + '&mode=vertical';
           var vResp3 = await fetch(vUrl3);
           var vData3 = await vResp3.json();
@@ -10890,13 +11014,11 @@ async function registerElements() {
           allHeaders = vData3.headers || [];
         } else {
           // 使用各方案导出时的 _exportLinkCol；兜底取 footer 下拉值
-          var linkCols = checked.map(function(s) { return (s.schema && s.schema._exportLinkCol) || ''; });
-          var linkCol = (document.getElementById('secLinkCol') && document.getElementById('secLinkCol').value) || '';
-          _debugLog('[保存并查询] footer下拉=' + linkCol + ' linkCols=' + linkCols.join(',') + ' schemes=' + checked.map(function(s){return s.name}).join(','));
-          var names = checked.map(function(s) { return encodeURIComponent(s.name); }).join(',');
+          _debugLog('[保存并查询] footer下拉=' + queryLinkCol + ' linkCols=' + queryLinkCols.join(',') + ' schemes=' + querySchemes.map(function(s){return s.name}).join(','));
+          var names = querySchemes.map(function(s) { return encodeURIComponent(s.name); }).join(',');
           var qUrl = 'http://127.0.0.1:' + Parser.state.pythonPort + '/api/chain-data/query?schemes=' + names
-            + (linkCols.some(function(c){return c;}) ? '&link_cols=' + encodeURIComponent(linkCols.join(',')) : '')
-            + (linkCol ? '&link_col=' + encodeURIComponent(linkCol) : '');
+            + (queryLinkCols.some(function(c){return c;}) ? '&link_cols=' + encodeURIComponent(queryLinkCols.join(',')) : '')
+            + (queryLinkCol ? '&link_col=' + encodeURIComponent(queryLinkCol) : '');
           var dbResp = await fetch(qUrl);
           var dbData = await dbResp.json();
           mergedRows = dbData.rows || [];
