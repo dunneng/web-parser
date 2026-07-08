@@ -535,8 +535,16 @@ async function registerElements() {
             wv2.executeJavaScript(jsCode).then(async function(raw2) {
               var data2 = JSON.parse(raw2 || '{"headers":[],"rows":[]}');
               if (data2.rows && data2.rows.length > 0) {
-                // 取已缓存的快照ID
-                var snapId = _snapList.length > 0 ? _snapList[_snapList.length - 1].id : 0;
+                // 从后端取最新的快照ID
+                var snapId = 0;
+                try {
+                  var slResp = await fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/page-snapshots/list');
+                  if (slResp.ok) {
+                    var slData = await slResp.json();
+                    var snaps = slData.snapshots || [];
+                    snapId = snaps.length > 0 ? snaps[snaps.length - 1].id : 0;
+                  }
+                } catch(e) {}
                 fetch('http://127.0.0.1:' + Parser.state.pythonPort + '/api/elements/batch', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ page_url: pageUrl, snapshot_id: snapId, headers: data2.headers, rows: data2.rows })
