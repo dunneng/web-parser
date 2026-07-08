@@ -10915,7 +10915,7 @@ async function registerElements() {
         contentTitle.textContent = '链路提取 (' + mergedRows.length + '行)';
         showQueryInputRow();
         Parser.state.queryResults = mergedRows;
-        renderQueryTable(mergedRows);
+        renderQueryTable(mergedRows, allHeaders);
         var m = document.getElementById('schemaModal');
         if (m) m.classList.add('hidden');
         Parser.state.chainSchemes.forEach(function(s) { s.checked = false; });
