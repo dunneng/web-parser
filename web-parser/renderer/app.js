@@ -5380,6 +5380,8 @@ async function registerElements() {
     var host = extractHost(webview.getURL());
     Parser.stealth.injectStealthConfig(host);
     Parser.stealth.applyStealthGlobals(host);
+    var _cs = Parser.stealth.getStealthScriptsForHost(host).filter(function(id) { return Parser.state.STEALTH_INJECT_IDS.indexOf(id) !== -1; });
+    if (_cs.length) Parser.stealth.injectStealthPrototypes(_cs);
     if (tab === 'scroll') {
       pfPrev.title = '回到顶部';
       pfNext.title = '向下滚动';
