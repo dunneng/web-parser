@@ -1249,7 +1249,10 @@ def _supplement_elements(chain_rows: list[dict], chain_headers: list[str],
                 continue
             vals = []
             for el in els:
+                # 吞尾文本，与拾取/链路行为一致
                 txt = (el.text_content() or "").strip()
+                if el.tail and el.tail.strip():
+                    txt = txt + " " + el.tail.strip() if txt else el.tail.strip()
                 vals.append(txt[:500])
 
             if not vals:
