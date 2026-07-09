@@ -1127,29 +1127,23 @@ async function registerElements() {
         + '});'
         + 'obs.observe(document.head||document.documentElement,{childList:true});'
         + '})()'
-      ).catch(function(){});
+      }).catch(function(){});
       // 注入 stealth 配置和原型包装（页面加载完成后注入到页面 JS 上下文）
       var injectHost = extractHost(webview.getURL());
       Parser.stealth.injectStealthConfig(injectHost);
       var injectScripts2 = Parser.stealth.getStealthScriptsForHost(injectHost).filter(function(id) { return Parser.state.STEALTH_INJECT_IDS.indexOf(id) !== -1; });
       Parser.stealth.injectStealthPrototypes(injectScripts2);
     });
-    // dom-ready 比 did-finish-load 更早触发（DOM 构建完成时）
+    // dom-ready：CDP 已处理预注入，无需在此重复
     webview.addEventListener('dom-ready', () => {
-      var host = extractHost(webview.getURL());
-      var scripts3 = Parser.stealth.getStealthScriptsForHost(host).filter(function(id) { return Parser.state.STEALTH_INJECT_IDS.indexOf(id) !== -1; });
-      if (scripts3.length > 0) {
-        Parser.stealth.injectStealthPrototypes(scripts3);
-      }
+      // （保留事件监听器占位，以防未来需要，但不再重复注入 stealth）
     });
     webview.addEventListener('did-start-loading', () => {
       if(pageInfo)pageInfo.textContent ='加载中...';
       // 注入 stealth 配置（尽早设置，让 preload 中的 stealth 能读取）
       var host = extractHost(webview.getURL());
       Parser.stealth.injectStealthConfig(host);
-      // 尽早注入原型包装（在页面脚本运行前）
-      var injectScripts3 = Parser.stealth.getStealthScriptsForHost(host).filter(function(id) { return Parser.state.STEALTH_INJECT_IDS.indexOf(id) !== -1; });
-      Parser.stealth.injectStealthPrototypes(injectScripts3);
+      // 原型包装由 CDP 预注入 + did-finish-load 补充，此处不再重复
       Parser.stealth.applyStealthGlobals(host);
     });
     webview.addEventListener('did-fail-load', (e) => {

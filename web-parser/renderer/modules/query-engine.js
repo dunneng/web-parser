@@ -343,12 +343,11 @@ window.Parser = window.Parser || {};
     var scripts = getStealthScriptsForHost(host);
     var injectScripts = scripts.filter(function(id) { return S.STEALTH_INJECT_IDS.indexOf(id) !== -1; });
     var configJSON = JSON.stringify({ scripts: injectScripts, host: host || '' });
-    // 1. 注入配置（让 preload 中的基础伪装可读取）
+    // 注入配置（让 preload 中的基础伪装可读取）——轻量操作，不放 prototypes
     document.getElementById("webview").executeJavaScript(
       '(function(){window.__parser=window.__parser||{};window.__parser._stealthConfig=' + configJSON + ';})()'
     ).catch(function() {});
-    // 2. 注入原型包装脚本（在页面上下文执行，能修改原型链）
-    injectStealthPrototypes(injectScripts);
+    // 注意：prototypes 由调用方在合适的时机（did-finish-load）单独注入，不在此处调用
   }
 
   // ── CDP 预注入（在所有页面脚本之前执行）──
