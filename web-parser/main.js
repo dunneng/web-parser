@@ -1073,10 +1073,10 @@ app.on('web-contents-created', (event, contents) => {
   if (contents.getType() === 'webview') {
     // 诊断：抓取 webview 渲染进程的所有 console 输出到文件，定位脚本错误
     const logPath = path.join(app.getPath('userData'), 'webview_console.log');
-    contents.on('console-message', (e, level, message, line, sourceId) => {
+    contents.on('console-message', (e) => {
       const ts = new Date().toISOString();
-      const prefix = level === 3 ? 'ERROR' : level === 2 ? 'WARN' : 'LOG';
-      fs.appendFileSync(logPath, `[${ts}] [${prefix}] ${sourceId}:${line} ${message}\n`);
+      const prefix = e.level === 3 ? 'ERROR' : e.level === 2 ? 'WARN' : 'LOG';
+      fs.appendFileSync(logPath, `[${ts}] [${prefix}] ${e.sourceId}:${e.line} ${e.message}\n`);
     });
     contents.on('context-menu', (e, params) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
