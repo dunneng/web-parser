@@ -9,9 +9,11 @@ const _origConsoleError = console.error;
 console.error = function(...args) {
   const msg = args.join(' ');
   if (msg.includes('GUEST_VIEW_MANAGER_CALL')) return;
+  // Error 经 contextIsolation 跨上下文传递后可能不是 Error 实例
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a instanceof Error && a.stack && a.stack.includes('GUEST_VIEW_MANAGER_CALL')) return;
+    if (!a || typeof a !== 'object') continue;
+    if ((a.stack || a.message || '').toString().includes('GUEST_VIEW_MANAGER_CALL')) return;
   }
   _origConsoleError.apply(console, args);
 };

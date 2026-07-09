@@ -10,10 +10,11 @@ const _origConsoleError = console.error;
 console.error = function(...args) {
   const msg = args.join(' ');
   if (msg.includes('GUEST_VIEW_MANAGER_CALL')) return;
-  // 还可能是 Error 对象（error.message 不含标题，但 stack 里有）
+  // Error 对象经 IPC 序列化后 instanceof 失效，需检查 stack/name 属性
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a instanceof Error && a.stack && a.stack.includes('GUEST_VIEW_MANAGER_CALL')) return;
+    if (!a || typeof a !== 'object') continue;
+    if ((a.stack || a.message || '').toString().includes('GUEST_VIEW_MANAGER_CALL')) return;
   }
   _origConsoleError.apply(console, args);
 };
