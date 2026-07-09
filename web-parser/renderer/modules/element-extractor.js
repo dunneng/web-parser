@@ -1094,7 +1094,7 @@ window.Parser = window.Parser || {};
         'if(sib.nodeType===3){if(sib.textContent&&sib.textContent.trim()){return (base.trim()+" "+sib.textContent.trim()).trim();}sib=sib.nextSibling;}' +
         'else if(sib.nodeType===1){break;}else{sib=sib.nextSibling;}' +
         '}return base.trim();' +
-        '}'
+        '}' +
         'function _mark(el){' +
         'if(el.__parserAutoMarked)return;' +
         'el.__parserAutoMarked=true;' +
