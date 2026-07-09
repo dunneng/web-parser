@@ -7141,7 +7141,7 @@ async function registerElements() {
             'else{sib=sib.nextSibling;}' +
           '}' +
           'return base;' +
-        '}'
+        '}' +
         'var fields=' + fieldsJson + ';' +
         'var delimiter=' + JSON.stringify(delimiter) + ';' +
         'var childDelimiter=' + JSON.stringify(childDelimiter) + ';' +
