@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-import os, glob as _glob
+import os
 _site_packages = r'C:\Users\15534\AppData\Roaming\Python\Python314\site-packages'
 
 a = Analysis(
@@ -16,9 +16,10 @@ a = Analysis(
         (os.path.join(_site_packages, 'rembg-2.0.76.dist-info'), 'rembg-2.0.76.dist-info'),
         (os.path.join(_site_packages, 'onnxruntime-1.27.0.dist-info'), 'onnxruntime-1.27.0.dist-info'),
     ],
-    hiddenimports=['open_clip', 'cn_clip', 'qdrant_client'],
+    hiddenimports=['open_clip', 'cn_clip', 'qdrant_client', 'pydantic_core._pydantic_core'],
     hookspath=[], hooksconfig={}, runtime_hooks=[], excludes=[], noarchive=False, optimize=0,
 )
 pyz = PYZ(a.pure)
-exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='python-backend', debug=False, strip=False, upx=True, console=True)
-coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=True, name='python-backend')
+
+# Build EXE only (skip COLLECT to avoid Windows Defender lock)
+exe = EXE(pyz, a.scripts, a.binaries, a.datas, [], name='python-backend', debug=False, strip=False, upx=False, console=True)

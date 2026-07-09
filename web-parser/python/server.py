@@ -40,7 +40,10 @@ from parser.regex_engine import regex_search
 from parser.jsonpath_engine import jsonpath_query
 from parser.chain_engine import chain_extract, trace_chain_backend
 import db
-import product_pipeline
+try:
+    import product_pipeline
+except ImportError:
+    product_pipeline = None
 
 logging.basicConfig(
     level=logging.WARNING,
@@ -64,12 +67,22 @@ def _safe_path_component(name: str) -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init_db()
-    try:
-        product_pipeline.init_pipeline()
-        logger.info("解析引擎启动完毕 (SQLite 持久化 + 向量库)")
-    except Exception as e:
-        logger.warning(f"向量库初始化失败（不影响基本解析功能）: {e}")
+    if product_pipeline is not None:
+        try:
+            _require_pipeline()
+            product_pipeline.init_pipeline()
+            logger.info("解析引擎启动完毕 (SQLite 持久化 + 向量库)")
+        except Exception as e:
+            logger.warning(f"向量库初始化失败（不影响基本解析功能）: {e}")
+    else:
+        logger.warning("product_pipeline 不可用，比价/向量搜索功能将不可用。安装: pip install torch cn-clip rembg qdrant-client")
     yield
+
+def _require_pipeline():
+    """检查 product_pipeline 是否可用"""
+    if product_pipeline is None:
+        raise HTTPException(status_code=503, detail="此功能需要安装: pip install torch cn-clip rembg qdrant-client")
+
 
 import threading
 import uuid
@@ -1152,6 +1165,7 @@ class IngestRequest(BaseModel):
 @app.post("/api/price-compare/ingest")
 async def ingest_product(req: IngestRequest):
     """入库一个商品（从链接）"""
+    _require_pipeline()
     pid = product_pipeline.ingest_product(
         platform=req.platform,
         url=req.url,
@@ -1170,6 +1184,7 @@ async def ingest_product(req: IngestRequest):
 @app.post("/api/price-compare/ingest-batch")
 async def ingest_products(products: list[dict]):
     """批量入库"""
+    _require_pipeline()
     ids = product_pipeline.ingest_products(products)
     return {"ok": True, "product_ids": ids, "count": len(ids)}
 
@@ -1178,6 +1193,7 @@ async def search_by_image(file: UploadFile = File(...), top_k: int = 20, platfor
     """以图搜图（可选按平台过滤：taobao/jd/pdd/1688/tmall）"""
     data = await file.read()
     skip_rembg_flag = skip_rembg == "1"
+    _require_pipeline()
     try:
         results = product_pipeline.search_by_image(
             image_data=data, top_k=top_k,
@@ -1194,6 +1210,7 @@ async def search_by_image(file: UploadFile = File(...), top_k: int = 20, platfor
 @app.get("/api/price-compare/search-by-url")
 async def search_by_url(url: str, top_k: int = 20):
     """根据商品链接搜同款"""
+    _require_pipeline()
     try:
         results = product_pipeline.search_by_url(url, top_k=top_k)
         return {"ok": True, "results": results, "count": len(results)}
@@ -1208,6 +1225,7 @@ async def search_by_text(text: str = Form(...), top_k: int = Form(20),
                           min_score: float = Form(0.35), platform: str = Form("")):
     """中文文字搜图（利用 Chinese-CLIP 文本编码器）
     min_score 默认 0.35（跨模态匹配天然低于图搜图）"""
+    _require_pipeline()
     try:
         results = product_pipeline.search_by_text(
             text=text, top_k=top_k, min_score=min_score,
@@ -1223,6 +1241,7 @@ async def search_by_text(text: str = Form(...), top_k: int = Form(20),
 @app.get("/api/price-compare/stats")
 async def get_price_compare_stats():
     """获取比价库状态"""
+    _require_pipeline()
     stats = product_pipeline.get_stats()
     return {"ok": True, **stats}
 
@@ -1270,6 +1289,7 @@ async def rebuild_all_vectors():
                 }
 
                 try:
+                    _require_pipeline()
                     result = product_pipeline.rebuild_product_vectors(pid)
                     if result.get("ok"):
                         success += 1
@@ -1425,6 +1445,7 @@ class IngestFromChainBody(BaseModel):
 @app.post("/api/price-compare/ingest-from-chain")
 async def ingest_from_chain(body: IngestFromChainBody):
     """从链路提取结果自动入库到比价库"""
+    _require_pipeline()
     return product_pipeline.ingest_from_chain_data(body.scheme_name)
 
 # ═══════════════════════════════════════════════
@@ -1456,6 +1477,7 @@ async def rebuild_vectors(data: dict = None):
             product_ids = [p.get("id") for p in all_products if p.get("status") == "active"]
         results = []
         for pid in product_ids:
+            _require_pipeline()
             r = product_pipeline.rebuild_product_vectors(pid)
             results.append({"product_id": pid, "ok": r.get("ok", False), "count": r.get("count", 0)})
         return {"ok": True, "results": results}
@@ -1938,6 +1960,7 @@ def _run_import_job(job_id: str, rows: list, template: dict | None, template_nam
                     "img_total": total_imgs,
                 }
 
+            _require_pipeline()
             pid = product_pipeline.ingest_product(
                 platform=pr["platform"],
                 url=pr["url"],
@@ -2048,6 +2071,7 @@ async def bg_remove_search(file: UploadFile = File(...), top_k: int = 20, platfo
     """上传图片 → 去背景 → 向量搜索 → 返回匹配商品"""
     try:
         data = await file.read()
+        _require_pipeline()
         results = product_pipeline.search_by_image(
             image_data=data, top_k=top_k,
             platform=platform if platform else None

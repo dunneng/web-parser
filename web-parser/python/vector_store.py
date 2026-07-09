@@ -10,10 +10,17 @@ from pathlib import Path
 import warnings
 warnings.filterwarnings("ignore", message="Payload indexes have no effect")
 
-from qdrant_client import QdrantClient
-from qdrant_client.models import (
-    Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
-)
+# 可选依赖：qdrant-client
+try:
+    from qdrant_client import QdrantClient
+    from qdrant_client.models import (
+        Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+    )
+    _QDRANT_AVAILABLE = True
+except ImportError:
+    QdrantClient = None
+    Distance = VectorParams = PointStruct = Filter = FieldCondition = MatchValue = None
+    _QDRANT_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +35,8 @@ _client: QdrantClient | None = None
 def get_client() -> QdrantClient:
     """获取 Qdrant 客户端（本地持久化模式）"""
     global _client
+    if not _QDRANT_AVAILABLE:
+        raise RuntimeError("向量库不可用：请 pip install qdrant-client")
     if _client is None:
         QDRANT_DIR.mkdir(parents=True, exist_ok=True)
         for attempt in range(5):

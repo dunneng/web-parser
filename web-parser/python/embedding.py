@@ -11,9 +11,18 @@ from pathlib import Path
 from io import BytesIO
 import numpy as np
 from PIL import Image
-import torch
-import cn_clip.clip as clip
-from rembg import remove
+
+# 可选依赖：cn-clip / torch / rembg
+try:
+    import torch
+    import cn_clip.clip as clip
+    from rembg import remove
+    _DEPS_AVAILABLE = True
+except ImportError:
+    torch = None
+    clip = None
+    remove = None
+    _DEPS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +43,8 @@ def _ensure_model():
     global _model, _preprocess, _device, _vector_dim
     if _model is not None:
         return
+    if not _DEPS_AVAILABLE:
+        raise RuntimeError("向量模型不可用：请 pip install torch cn-clip rembg")
     _device = torch.device("cpu")
     logger.info(f"[embedding] 加载 Chinese-CLIP {MODEL_NAME} 到 {_device} ...")
     _model, _preprocess = clip.load_from_name(
@@ -56,6 +67,8 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     rembg (U-2-Net) 自动抠图，输出 RGBA；
     贴到纯白背景上，统一转为 RGB
     """
+    if not _DEPS_AVAILABLE:
+        return image.convert("RGB")  # 无 rembg 时跳过抠图
     output = remove(image)  # RGBA
     # alpha 通道做 mask，贴到白底
     bg = Image.new("RGB", output.size, (255, 255, 255))

@@ -12,7 +12,10 @@ from PIL import Image
 
 import db
 import vector_store
-import embedding
+try:
+    import embedding
+except ImportError:
+    embedding = None
 
 logger = logging.getLogger(__name__)
 
