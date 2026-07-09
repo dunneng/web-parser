@@ -347,8 +347,6 @@ window.Parser = window.Parser || {};
     document.getElementById("webview").executeJavaScript(
       '(function(){window.__parser=window.__parser||{};window.__parser._stealthConfig=' + configJSON + ';})()'
     ).catch(function() {});
-    // 2. 注入原型包装脚本（在页面上下文执行，能修改原型链）
-    injectStealthPrototypes(injectScripts);
   }
 
   // ── CDP 预注入（在所有页面脚本之前执行）──
