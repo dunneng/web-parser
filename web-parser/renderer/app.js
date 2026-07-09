@@ -1018,9 +1018,8 @@ async function registerElements() {
     btnManagePickedHeader.classList.remove('hidden');
     var _rml=document.getElementById('btnRuleModeList'); if(_rml)_rml.classList.remove('hidden');
     var _rmd=document.getElementById('btnRuleModeDetail'); if(_rmd)_rmd.classList.remove('hidden');
-    // 预注入 stealth 配置（在 preload 运行前尽可能早）
+    // 预注入 stealth 全局设置（UA切换等，不涉及 webview executeJavaScript）
     var host = extractHost(url);
-    Parser.stealth.injectStealthConfig(host);
     Parser.stealth.applyStealthGlobals(host);
     webview.loadURL(url);
     addHistory(url, '');
@@ -1141,8 +1140,7 @@ async function registerElements() {
       if(pageInfo)pageInfo.textContent ='加载中...';
       // 注入 stealth 配置（尽早设置，让 preload 中的 stealth 能读取）
       var host = extractHost(webview.getURL());
-      Parser.stealth.injectStealthConfig(host);
-      // 原型包装由 CDP 预注入 + dom-ready + did-finish-load 覆盖
+      // config+prototypes 统一由 did-finish-load 注入（此时页面稳定）
       Parser.stealth.applyStealthGlobals(host);
     });
     webview.addEventListener('did-fail-load', (e) => {
