@@ -5,7 +5,7 @@
 import logging
 logger = logging.getLogger(__name__)
 from lxml import html, etree
-from .css_engine import get_child_text, get_direct_text, _truncate
+from .css_engine import get_child_text, get_direct_text, get_text_with_tail, _truncate
 
 
 def _walk_sub_chain(el, sub_chain: dict):
@@ -183,7 +183,11 @@ def chain_extract(raw_html: str, chain_type: str, deepest_selector: str,
                         pass
                 v = (f.get('childDelimiter', '') or '').join(parts)
             elif is_text or not attr_name:
-                v = get_child_text(target, '', 5000)
+                # 子链路 → 吞尾文本；当前层级元素 → 保持原行为
+                if sub_chain:
+                    v = get_text_with_tail(target)
+                else:
+                    v = get_child_text(target, '', 5000)
             else:
                 v = (target.get(attr_name) or '')
             values.append(v)

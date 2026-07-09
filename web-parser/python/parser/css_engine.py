@@ -68,6 +68,17 @@ def get_child_texts(el, child_delim: str = "", max_text_len: int = 2000):
     return _truncate(text, max_text_len), [p for p in parts if p]
 
 
+def get_text_with_tail(el, max_text_len: int = 5000) -> str:
+    """取元素文本 + 紧邻的后续文本节点（el.tail）。
+    
+    例如 <span>ISBN:</span> 9787532787253 → "ISBN: 9787532787253"
+    """
+    text = (el.text_content() or "").strip()
+    if el.tail and el.tail.strip():
+        text = text + " " + el.tail.strip()
+    return _truncate(text.strip(), max_text_len)
+
+
 # 常用属性中文别名
 _COMMON_ATTRS = {
     "href": "链接", "src": "来源", "class": "类名", "id": "ID",

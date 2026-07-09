@@ -7129,6 +7129,19 @@ async function registerElements() {
           '}' +
           'return parts.join(childDelim);' +
         '}' +
+        'function getTextWithTail(el){' +
+          'var base=getChildText(el,"");' +
+          'if(!base)return "";' +
+          'var sib=el.nextSibling;' +
+          'while(sib){' +
+            'if(sib.nodeType===3){' +
+              'if(sib.textContent&&sib.textContent.trim()){return base+" "+cleanText(sib.textContent);}' +
+              'sib=sib.nextSibling;' +
+            '}else if(sib.nodeType===1){break;}' +
+            'else{sib=sib.nextSibling;}' +
+          '}' +
+          'return base;' +
+        '}'
         'var fields=' + fieldsJson + ';' +
         'var delimiter=' + JSON.stringify(delimiter) + ';' +
         'var childDelimiter=' + JSON.stringify(childDelimiter) + ';' +
@@ -7217,7 +7230,9 @@ async function registerElements() {
                   'var v;' +
                   'if(target){' +
                     'if(isText||!attrName){' +
-                      'v=getChildText(target,childDelimiter);' +
+                      // 子链路 → 吞尾文本
+                      'if(subChain){v=getTextWithTail(target);}' +
+                      'else{v=getChildText(target,childDelimiter);}' +
                     '}else{' +
                       'v=target.getAttribute(attrName);' +
                       'if((v===null||v===undefined)&&(attrName in target))v=target[attrName];' +
