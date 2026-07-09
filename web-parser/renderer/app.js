@@ -1134,13 +1134,8 @@ async function registerElements() {
       var injectScripts2 = Parser.stealth.getStealthScriptsForHost(injectHost).filter(function(id) { return Parser.state.STEALTH_INJECT_IDS.indexOf(id) !== -1; });
       Parser.stealth.injectStealthPrototypes(injectScripts2);
     });
-    // dom-ready 比 did-finish-load 更早触发（DOM 构建完成时）
+    // dom-ready：CDP 预注入 + did-finish-load 已覆盖，此处不再重复执行
     webview.addEventListener('dom-ready', () => {
-      var host = extractHost(webview.getURL());
-      var scripts3 = Parser.stealth.getStealthScriptsForHost(host).filter(function(id) { return Parser.state.STEALTH_INJECT_IDS.indexOf(id) !== -1; });
-      if (scripts3.length > 0) {
-        Parser.stealth.injectStealthPrototypes(scripts3);
-      }
     });
     webview.addEventListener('did-start-loading', () => {
       if(pageInfo)pageInfo.textContent ='加载中...';
