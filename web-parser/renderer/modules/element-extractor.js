@@ -313,12 +313,28 @@ window.Parser = window.Parser || {};
             + 'els.push({el:el,tag:el.tagName.toLowerCase(),'
               + 'id:el.id||"",'
               + 'cls:(typeof el.className==="string"?el.className:"").substring(0,50),'
-              + 'text:(el.textContent||"").trim().substring(0,500),'
+              + 'text:getElementFullText(el).substring(0,500),'
               + 'cssPath:genCSS(el,5),' // 每个层级的唯一 CSS 路径
             + '});'
             + 'el=el.parentElement;'
           + '}'
           + 'return els;'
+        + '}'
+
+        // 取元素完整可见文本（含紧邻的后续文本节点，如 <span>ISBN:</span> 978...）
+        + 'function getElementFullText(el){'
+          + 'var base=(el.textContent||"");'
+          + 'var sib=el.nextSibling;'
+          + 'while(sib){'
+            + 'if(sib.nodeType===3){'
+              + 'if(sib.textContent&&sib.textContent.trim()){'
+                + 'return (base.trim()+" "+sib.textContent.trim()).trim();'
+              + '}'
+              + 'sib=sib.nextSibling;'
+            + '}else if(sib.nodeType===1){break;}'
+            + 'else{sib=sib.nextSibling;}'
+          + '}'
+          + 'return base.trim();'
         + '}'
 
         // 处理元素选中（可重复调用：不重复绘制、不重复入数组，但始终入列）
@@ -340,7 +356,7 @@ window.Parser = window.Parser || {};
             + 'css:cssPath,'
             + 'xpath:getXPath(el),'
             + 'count:cssCount,'
-            + 'text:(el.textContent||"").trim().substring(0,2000),'
+            + 'text:getElementFullText(el).substring(0,2000),'
             + 'class:el.className||"",'
             + 'id:el.id||"",'
             + 'href:el.href||"",'
@@ -353,7 +369,7 @@ window.Parser = window.Parser || {};
             + 'css:cssPath,'
             + 'xpath:getXPath(el),'
             + 'count:cssCount,'
-            + 'text:(el.textContent||"").trim().substring(0,2000),'
+            + 'text:getElementFullText(el).substring(0,2000),'
             + 'class:el.className||"",'
             + 'id:el.id||"",'
             + 'href:el.href||"",'
@@ -434,7 +450,7 @@ window.Parser = window.Parser || {};
               + 'css:cssPath,'
               + 'xpath:xpath,'
               + 'count:cnt,'
-              + 'text:(el.textContent||"").trim().substring(0,500),'
+              + 'text:getElementFullText(el).substring(0,500),'
               + 'class:el.className||"",'
               + 'id:el.id||"",'
               + 'href:el.href||el.src||"",'
@@ -1067,11 +1083,18 @@ window.Parser = window.Parser || {};
         'window.__parserAutoBoxes=[];' +
         'var _seen={};' +
         'function _dk(el,sel){' +
-        'var t=(el.textContent||"").trim().substring(0,200);' +
+        'var t=getElementFullText(el).substring(0,200);' +
         'var s=String(typeof el.src==="string"?el.src:(el.getAttribute?(el.getAttribute("src")||""):""));' +
         'var h=String(typeof el.href==="string"?el.href:(el.getAttribute?(el.getAttribute("href")||""):""));' +
         'return sel+"||"+s+"||"+h+"||"+t;' +
         '}' +
+        'function getElementFullText(el){' +
+        'var base=(el.textContent||"");var sib=el.nextSibling;' +
+        'while(sib){' +
+        'if(sib.nodeType===3){if(sib.textContent&&sib.textContent.trim()){return (base.trim()+" "+sib.textContent.trim()).trim();}sib=sib.nextSibling;}' +
+        'else if(sib.nodeType===1){break;}else{sib=sib.nextSibling;}' +
+        '}return base.trim();' +
+        '}'
         'function _mark(el){' +
         'if(el.__parserAutoMarked)return;' +
         'el.__parserAutoMarked=true;' +
@@ -1122,7 +1145,7 @@ window.Parser = window.Parser || {};
         'window.__parserAutoMatched.push({' +
         '"tag":(el.tagName||"").toLowerCase(),' +
         '"css":r.selector,' +
-        '"text":(el.textContent||"").trim().substring(0,500),' +
+        '"text":getElementFullText(el).substring(0,500),' +
         '"class":String(typeof el.className==="string"?el.className:""),' +
         '"id":String(el.id||""),' +
         '"href":String(typeof el.href==="string"?el.href:(el.getAttribute?(el.getAttribute("href")||""):"")),' +
@@ -1311,6 +1334,7 @@ window.Parser = window.Parser || {};
     var matchedItems = [];
     try {
       var matchJson = await document.getElementById("webview").executeJavaScript('(async function(samples){' +
+        'function getElementFullText(el){var base=(el.textContent||"");var sib=el.nextSibling;while(sib){if(sib.nodeType===3){if(sib.textContent&&sib.textContent.trim()){return (base.trim()+" "+sib.textContent.trim()).trim();}sib=sib.nextSibling;}else if(sib.nodeType===1){break;}else{sib=sib.nextSibling;}}return base.trim();}' +
         // 注入高亮动画样式（一次性）
         'var _hlStyle=document.getElementById("__parser_hl_anim");if(!_hlStyle){_hlStyle=document.createElement("style");_hlStyle.id="__parser_hl_anim";_hlStyle.textContent="@keyframes __parser_hl_pulse{0%,100%{opacity:0.85;transform:scale(1)}50%{opacity:1;transform:scale(1.02)}}";document.head.appendChild(_hlStyle);}' +
         // 清理旧高亮浮层
@@ -1345,7 +1369,7 @@ window.Parser = window.Parser || {};
           'el.__parserBox=ov;' +
         '}else{var oldPos=el.style.position;ov.setAttribute("data-ppos",oldPos||"");if(!oldPos||oldPos==="static")el.style.position="relative";ov.style.cssText="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483640;border:4px solid "+borderColor+";border-radius:4px;box-sizing:border-box;background:"+bgColor+";box-shadow:0 0 12px rgba(167,139,250,0.3),0 0 24px rgba(167,139,250,0.15);animation:__parser_hl_pulse 1s ease-in-out";el.appendChild(ov);el.__parserBox=ov}_hlCount++;}' +
         // extractInfo
-        'function extractInfo(el){var cssPath="",xpath="";try{var cur=el;var parts2=[];var xpParts=[];for(var d=0;d<5&&cur&&cur!==document.body&&cur!==document.documentElement;d++){var t2=cur.tagName.toLowerCase();if(cur.id){parts2.unshift("#"+cur.id);xpParts.unshift("*[@id=\\""+cur.id+"\\"]");break}var cls3=(typeof cur.className==="string"?cur.className:"").trim().split(/\\s+/).filter(Boolean).slice(0,2);if(cls3.length)t2+="."+cls3.join(".");var pa=cur.parentElement;if(pa){var sibs=Array.from(pa.children).filter(function(x){return x.tagName===cur.tagName});if(sibs.length>1){var idx2=sibs.indexOf(cur)+1;t2+=":nth-of-type("+idx2+")"}var xpTag=t2.replace(/:.*/,"");if(sibs.length>1)xpTag+="["+idx2+"]";xpParts.unshift(xpTag)}else{xpParts.unshift(t2.replace(/:.*/,""))}parts2.unshift(t2);cur=pa}cssPath=parts2.join(" > ");if(xpParts.length)xpath="//"+xpParts.join("/")}catch(ex){}var cnt=0;try{cnt=document.querySelectorAll(cssPath).length}catch(e){}var info={tag:el.tagName.toLowerCase(),css:cssPath||"",xpath:xpath,count:cnt,text:(el.textContent||"").trim().substring(0,500)};var attrs=el.attributes;for(var ai=0;ai<attrs.length;ai++){var a=attrs[ai];if(a.name&&a.value!==undefined)info[a.name]=a.value||"";}return info;}' +
+        'function extractInfo(el){var cssPath="",xpath="";try{var cur=el;var parts2=[];var xpParts=[];for(var d=0;d<5&&cur&&cur!==document.body&&cur!==document.documentElement;d++){var t2=cur.tagName.toLowerCase();if(cur.id){parts2.unshift("#"+cur.id);xpParts.unshift("*[@id=\\""+cur.id+"\\"]");break}var cls3=(typeof cur.className==="string"?cur.className:"").trim().split(/\\s+/).filter(Boolean).slice(0,2);if(cls3.length)t2+="."+cls3.join(".");var pa=cur.parentElement;if(pa){var sibs=Array.from(pa.children).filter(function(x){return x.tagName===cur.tagName});if(sibs.length>1){var idx2=sibs.indexOf(cur)+1;t2+=":nth-of-type("+idx2+")"}var xpTag=t2.replace(/:.*/,"");if(sibs.length>1)xpTag+="["+idx2+"]";xpParts.unshift(xpTag)}else{xpParts.unshift(t2.replace(/:.*/,""))}parts2.unshift(t2);cur=pa}cssPath=parts2.join(" > ");if(xpParts.length)xpath="//"+xpParts.join("/")}catch(ex){}var cnt=0;try{cnt=document.querySelectorAll(cssPath).length}catch(e){}var info={tag:el.tagName.toLowerCase(),css:cssPath||"",xpath:xpath,count:cnt,text:getElementFullText(el).substring(0,500)};var attrs=el.attributes;for(var ai=0;ai<attrs.length;ai++){var a=attrs[ai];if(a.name&&a.value!==undefined)info[a.name]=a.value||"";}return info;}' +
                 // 核心：遍历样本、找标本、查同类、去重（滚屏探底版）
         // 保存原始滚动位置
         'var origSX=window.scrollX||window.pageXOffset||0;' +
@@ -1680,7 +1704,7 @@ window.Parser = window.Parser || {};
       optEl.addEventListener('click', function () {
         // 使用 CSS 路径精确定位元素（mask 有 pointer-events:none，无需处理）
         document.getElementById("webview").executeJavaScript('(function(cssPath){'
-          + 'var el=document.querySelector(cssPath);'
+          + 'function getElementFullText(el){var base=(el.textContent||"");var sib=el.nextSibling;while(sib){if(sib.nodeType===3){if(sib.textContent&&sib.textContent.trim()){return (base.trim()+" "+sib.textContent.trim()).trim();}sib=sib.nextSibling;}else if(sib.nodeType===1){break;}else{sib=sib.nextSibling;}}return base.trim();}var el=document.querySelector(cssPath);'
           + 'if(!el||el===document.body||el===document.documentElement)return;'
           + 'if(el.__parserPicked)return;'
           + 'var fn=new Function("return window.__parserPickEl")();'
@@ -1698,7 +1722,7 @@ window.Parser = window.Parser || {};
             + 'if(!window.__parserPickedEls)window.__parserPickedEls=[];'
             + 'window.__parserPickedEls.push(el);'
             + 'var cnt;try{cnt=document.querySelectorAll(cssPath).length;}catch(e){cnt=0;}'
-            + 'var info={tag:el.tagName.toLowerCase(),css:cssPath,count:cnt,text:(el.textContent||"").trim().substring(0,2000)};var attrs=el.attributes;for(var ai=0;ai<attrs.length;ai++){var a=attrs[ai];if(a.name&&a.value!==undefined)info[a.name]=a.value||"";}window.__parserPicked.push(info);'
+            + 'var info={tag:el.tagName.toLowerCase(),css:cssPath,count:cnt,text:getElementFullText(el).substring(0,2000)};var attrs=el.attributes;for(var ai=0;ai<attrs.length;ai++){var a=attrs[ai];if(a.name&&a.value!==undefined)info[a.name]=a.value||"";}window.__parserPicked.push(info);'
           + '}'
         + '})(' + JSON.stringify(cssPath) + ')');
 
@@ -1811,12 +1835,13 @@ window.Parser = window.Parser || {};
     try {
       var isXpath = sel.indexOf('/') === 0;
       var raw = await document.getElementById("webview").executeJavaScript('(function(s,xp){' +
+        'function getElementFullText(el){var base=(el.textContent||"");var sib=el.nextSibling;while(sib){if(sib.nodeType===3){if(sib.textContent&&sib.textContent.trim()){return (base.trim()+" "+sib.textContent.trim()).trim();}sib=sib.nextSibling;}else if(sib.nodeType===1){break;}else{sib=sib.nextSibling;}}return base.trim();}' +
         'try{var els=xp?document.evaluate(s,document,null,XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,null):document.querySelectorAll(s);' +
         'var res=[];var n=xp?els.snapshotLength:els.length;' +
         'for(var i=0;i<Math.min(n,50);i++){' +
           'var e=xp?els.snapshotItem(i):els[i];' +
           'var t=e.tagName.toLowerCase();' +
-          'var txt=(e.textContent||"").trim().substring(0,200);' +
+          'var txt=getElementFullText(e).substring(0,200);' +
           'if(!txt)continue;' +
           'res.push({tag:t,text:txt,css:xp?s:s,isInline:false,checked:true});' +
         '}return JSON.stringify(res);' +
