@@ -5376,8 +5376,6 @@ async function registerElements() {
     var host = extractHost(webview.getURL());
     Parser.stealth.injectStealthConfig(host);
     Parser.stealth.applyStealthGlobals(host);
-    var _colScripts = Parser.stealth.getStealthScriptsForHost(host).filter(function(id) { return Parser.state.STEALTH_INJECT_IDS.indexOf(id) !== -1; });
-    if (_colScripts.length) Parser.stealth.injectStealthPrototypes(_colScripts);
     if (tab === 'scroll') {
       pfPrev.title = '回到顶部';
       pfNext.title = '向下滚动';
