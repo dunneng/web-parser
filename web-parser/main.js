@@ -10,6 +10,11 @@ const _origConsoleError = console.error;
 console.error = function(...args) {
   const msg = args.join(' ');
   if (msg.includes('GUEST_VIEW_MANAGER_CALL')) return;
+  // 还可能是 Error 对象（error.message 不含标题，但 stack 里有）
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a instanceof Error && a.stack && a.stack.includes('GUEST_VIEW_MANAGER_CALL')) return;
+  }
   _origConsoleError.apply(console, args);
 };
 process.on('uncaughtException', (err) => {
@@ -1065,6 +1070,13 @@ app.on('web-contents-created', (event, contents) => {
   });
   // 转发右键菜单到主窗口（仅 webview，主窗口有自己的右键处理）
   if (contents.getType() === 'webview') {
+    // 诊断：抓取 webview 渲染进程的所有 console 输出到文件，定位脚本错误
+    const logPath = path.join(app.getPath('userData'), 'webview_console.log');
+    contents.on('console-message', (e, level, message, line, sourceId) => {
+      const ts = new Date().toISOString();
+      const prefix = level === 3 ? 'ERROR' : level === 2 ? 'WARN' : 'LOG';
+      fs.appendFileSync(logPath, `[${ts}] [${prefix}] ${sourceId}:${line} ${message}\n`);
+    });
     contents.on('context-menu', (e, params) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('webview:context-menu', params);

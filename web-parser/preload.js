@@ -2,6 +2,20 @@
  * 网页源码解析器 — 预加载脚本
  * 安全暴露 IPC API 给渲染进程
  */
+
+// 抑制 GUEST_VIEW_MANAGER_CALL 噪声（渲染进程侧）
+// main.js 的过滤只覆盖主进程，渲染进程 sandbox_bundle 的内部错误需要在此拦截
+const _origConsoleError = console.error;
+console.error = function(...args) {
+  const msg = args.join(' ');
+  if (msg.includes('GUEST_VIEW_MANAGER_CALL')) return;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a instanceof Error && a.stack && a.stack.includes('GUEST_VIEW_MANAGER_CALL')) return;
+  }
+  _origConsoleError.apply(console, args);
+};
+
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
