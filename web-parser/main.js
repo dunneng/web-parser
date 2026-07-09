@@ -312,6 +312,9 @@ async function loadCookiesForUrl(url) {
   return null;
 }
 
+// Cookie 保存去重缓存：避免同域名反复写盘（批量翻页时 did-finish-load 每页都触发）
+const _cookieSaveCache = {};
+
 async function saveCookiesForUrl(url) {
   const domain = getDomainFromUrl(url);
   if (!domain) return;
@@ -321,6 +324,10 @@ async function saveCookiesForUrl(url) {
     const relevant = cookies.filter(c => domain.includes(c.domain) || c.domain.includes(domain));
 
     if (relevant.length > 0) {
+      // 同域名条数没变就跳过（不写盘、不刷日志）
+      if (_cookieSaveCache[domain] === relevant.length) return { domain, count: relevant.length, skipped: true };
+      _cookieSaveCache[domain] = relevant.length;
+
       const file = path.join(COOKIES_DIR, `${domain}.json`);
       fs.writeFileSync(file, JSON.stringify({
         cookies: relevant,
