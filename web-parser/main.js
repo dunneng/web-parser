@@ -1,9 +1,6 @@
 /**
  * 网页源码解析器 — Electron 主进程
  */
-// 提高 EventEmitter 上限，消除 webview 内部 did-stop-loading 监听器警告
-require('events').EventEmitter.defaultMaxListeners = 20;
-
 const { app, BrowserWindow, ipcMain, session, protocol, net: electronNet } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
