@@ -1094,44 +1094,44 @@ async function registerElements() {
       if (url && url !== 'about:blank') {
         urlInput.value = url;
         addHistory(url, '');
+        window.api.cookieSave(url).then(r => {
+          if (r && r.count > 0) {
+            statusCookie.textContent = 'Cookie: ' + r.count + '条(已保存)';
+            if(cookieStatus) { cookieStatus.textContent = 'Cookie ' + r.count; cookieStatus.style.color = ''; }
+          }
+        }).catch(() => {});
+        // 注入 contextmenu 监听（供右键"定位到表格行"使用）
+        _ensureCtxInjected();
+        // 注入滚动条（用 style 标签，优先级高于 inline setProperty）
+        webview.executeJavaScript(
+          '(function(){'
+          + 'var id="__parser_scroll_style";'
+          + 'var old=document.getElementById(id);if(old)old.remove();'
+          + 'var s=document.createElement("style");s.id=id;'
+          + 's.textContent="html,body{overflow-x:scroll!important;overflow-y:scroll!important}"+'
+            + '"html::-webkit-scrollbar{width:10px;height:10px}"+'
+            + '"html::-webkit-scrollbar-track{background:#e8e8e8;border-radius:5px}"+'
+            + '"html::-webkit-scrollbar-thumb{background:#b0b0b0;border-radius:5px;border:2px solid #e8e8e8}"+'
+            + '"html::-webkit-scrollbar-thumb:hover{background:#888}"+'
+            + '"html::-webkit-scrollbar-corner{background:#e8e8e8}";'
+          + '(document.head||document.documentElement).appendChild(s);'
+          // MutationObserver 保活：页面脚本删了我们的 style 就重新注入
+          + 'var obs=new MutationObserver(function(){'
+            + 'if(!document.getElementById(id)){(document.head||document.documentElement).appendChild(s);}'
+          + '});'
+          + 'obs.observe(document.head||document.documentElement,{childList:true});'
+          + '})()'
+        ).catch(function(){});
+        // 注入 stealth 配置和原型包装（页面加载完成后注入到页面 JS 上下文）
+        var injectHost = extractHost(webview.getURL());
+        Parser.stealth.injectStealthConfig(injectHost);
+        var injectScripts2 = Parser.stealth.getStealthScriptsForHost(injectHost).filter(function(id) { return Parser.state.STEALTH_INJECT_IDS.indexOf(id) !== -1; });
+        Parser.stealth.injectStealthPrototypes(injectScripts2);
       }
       const host = extractHost(url);
       if(pageInfo)pageInfo.textContent =host;
       statusDomain.textContent = host;
       setStatus('加载完成 - 点击"解析"提取数据');
-      window.api.cookieSave(url).then(r => {
-        if (r && r.count > 0) {
-          statusCookie.textContent = 'Cookie: ' + r.count + '条(已保存)';
-          if(cookieStatus) { cookieStatus.textContent = 'Cookie ' + r.count; cookieStatus.style.color = ''; }
-        }
-      }).catch(() => {});
-      // 注入 contextmenu 监听（供右键"定位到表格行"使用）
-      _ensureCtxInjected();
-      // 注入滚动条（用 style 标签，优先级高于 inline setProperty）
-      webview.executeJavaScript(
-        '(function(){'
-        + 'var id="__parser_scroll_style";'
-        + 'var old=document.getElementById(id);if(old)old.remove();'
-        + 'var s=document.createElement("style");s.id=id;'
-        + 's.textContent="html,body{overflow-x:scroll!important;overflow-y:scroll!important}"+'
-          + '"html::-webkit-scrollbar{width:10px;height:10px}"+'
-          + '"html::-webkit-scrollbar-track{background:#e8e8e8;border-radius:5px}"+'
-          + '"html::-webkit-scrollbar-thumb{background:#b0b0b0;border-radius:5px;border:2px solid #e8e8e8}"+'
-          + '"html::-webkit-scrollbar-thumb:hover{background:#888}"+'
-          + '"html::-webkit-scrollbar-corner{background:#e8e8e8}";'
-        + '(document.head||document.documentElement).appendChild(s);'
-        // MutationObserver 保活：页面脚本删了我们的 style 就重新注入
-        + 'var obs=new MutationObserver(function(){'
-          + 'if(!document.getElementById(id)){(document.head||document.documentElement).appendChild(s);}'
-        + '});'
-        + 'obs.observe(document.head||document.documentElement,{childList:true});'
-        + '})()'
-      ).catch(function(){});
-      // 注入 stealth 配置和原型包装（页面加载完成后注入到页面 JS 上下文）
-      var injectHost = extractHost(webview.getURL());
-      Parser.stealth.injectStealthConfig(injectHost);
-      var injectScripts2 = Parser.stealth.getStealthScriptsForHost(injectHost).filter(function(id) { return Parser.state.STEALTH_INJECT_IDS.indexOf(id) !== -1; });
-      Parser.stealth.injectStealthPrototypes(injectScripts2);
     });
     // dom-ready：CDP 预注入 + did-finish-load 已覆盖，此处不再重复执行
     webview.addEventListener('dom-ready', () => {

@@ -4,6 +4,19 @@
 // 提高 EventEmitter 上限，消除 webview 内部 did-stop-loading 监听器警告
 require('events').EventEmitter.defaultMaxListeners = 20;
 
+// 抑制 GUEST_VIEW_MANAGER_CALL 噪声——executeJavaScript 已有 .catch() 兜底，
+// Electron 在 IPC 层额外报错属于冗余日志，不影响功能
+const _origConsoleError = console.error;
+console.error = function(...args) {
+  const msg = args.join(' ');
+  if (msg.includes('GUEST_VIEW_MANAGER_CALL')) return;
+  _origConsoleError.apply(console, args);
+};
+process.on('uncaughtException', (err) => {
+  if (err && err.message && err.message.includes('GUEST_VIEW_MANAGER_CALL')) return;
+  console.error('Uncaught Exception:', err);
+});
+
 const { app, BrowserWindow, ipcMain, session, protocol, net: electronNet } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
