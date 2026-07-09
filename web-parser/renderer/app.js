@@ -670,7 +670,7 @@ async function registerElements() {
     });
 
     // 工具栏 — 与其他树面板一致
-    var actionsEl = document.getElementById('contentActions');
+    var actionsEl = document.getElementById('panelContentActions');
     if (actionsEl) {
       actionsEl.innerHTML = '';
       actionsEl.style.display = 'flex';
@@ -1668,7 +1668,7 @@ async function registerElements() {
 
   function hideAllPanels() {
     [editorContainer, queryContainer, domTreeContainer, jsonViewerContainer, contentEmpty].forEach(el => el.classList.add('hidden'));
-    var actionsEl = document.getElementById('contentActions');
+    var actionsEl = document.getElementById('panelContentActions');
     if (actionsEl) { actionsEl.innerHTML = ''; actionsEl.style.display = ''; }
     var inputRow = queryContainer.querySelector('.query-input-row');
     if (inputRow) inputRow.style.display = '';
@@ -7381,7 +7381,7 @@ async function registerElements() {
 
   /** 在 contentActions 中显示导出格式按钮 */
   function renderSchemaExportActions(headers) {
-    var actionsEl = document.getElementById('contentActions');
+    var actionsEl = document.getElementById('panelContentActions');
     if (!actionsEl) return;
     actionsEl.innerHTML = '';
     actionsEl.style.display = 'flex';

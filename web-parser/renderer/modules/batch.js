@@ -1257,6 +1257,20 @@ window.Parser = window.Parser || {};
         if (S.currentHtml) {
           // ── 多级状态检测 ──
           if (!/^local-html:\/\//i.test(t.url)) {
+            // 步骤 1: 页面指纹检测（DOM 结构、iframe、标题等，不依赖关键词）
+            try {
+              var fpRisk = await detectPageFingerprint();
+              if (fpRisk && fpRisk.level === 'captcha') {
+                t.status = 'verify'; t.error = fpRisk.reason;
+                S.batchLoadPaused = true;
+                document.getElementById("webviewOverlay").classList.add('hidden');
+                document.getElementById('panelRight').scrollIntoView();
+                renderBatchTags();
+                setStatus('🤖 验证页: ' + fpRisk.reason + ' — 请手动通过后点击「继续」');
+                break;
+              }
+            } catch(_) {}
+            // 步骤 2: 关键词检测（兜底）
             var risk = detectRiskSignals(S.currentHtml, 0, (cnCurrentUrl||t.url), t.url);
             if (risk.level === 'blocked') {
               t.status = 'blocked'; t.error = risk.reason;
@@ -1602,6 +1616,64 @@ window.Parser = window.Parser || {};
     });
   }
 
+  // ── 页面指纹检测（注入 JS 检查 DOM 结构，不依赖关键词）──
+  async function detectPageFingerprint() {
+    try {
+      var wv = document.getElementById('webview');
+      if (!wv) return null;
+      var fp = await wv.executeJavaScript('(function(){' +
+        'var result = {level:"safe", reason:""};' +
+        // 1. 检查 iframe 指向已知验证平台
+        'var iframes = document.querySelectorAll("iframe");' +
+        'for (var i = 0; i < iframes.length; i++) {' +
+          'var src = (iframes[i].src || "").toLowerCase();' +
+          'if (/recaptcha|hcaptcha|challenge-platform|arkoselabs|funcaptcha|geetest|verify\\.aliyuncs/.test(src)) {' +
+            'result.level = "captcha"; result.reason = "验证iframe: " + src.substring(0, 80);' +
+            'return JSON.stringify(result);' +
+          '}' +
+        '}' +
+        // 2. Cloudflare Challenge 特征
+        'if (document.getElementById("challenge-stage") || document.getElementById("cf-challenge") ||' +
+            'document.querySelector("div.cf-browser-verify, div.cf-challenge, div[class*=\\"cf-turnstile\\"]")) {' +
+          'result.level = "captcha"; result.reason = "Cloudflare Challenge";' +
+          'return JSON.stringify(result);' +
+        '}' +
+        // 3. 页面标题检查
+        'var t = (document.title || "").toLowerCase();' +
+        'if (/just a moment|安全检查|验证|verify you are|attention required|security check|blocked/i.test(t)) {' +
+          'result.level = "captcha"; result.reason = "标题: " + document.title.substring(0, 60);' +
+          'return JSON.stringify(result);' +
+        '}' +
+        // 4. 极限短 body（JS Challenge 特征：只有 script + noscript）
+        'var body = document.body;' +
+        'if (body) {' +
+          'var html = body.innerHTML.trim();' +
+          'var textLen = (body.innerText || "").trim().length;' +
+          'if (html.length < 3000 && textLen < 100) {' +
+            'var hasScript = body.querySelectorAll("script").length > 0;' +
+            'var hasNoscript = body.querySelectorAll("noscript").length > 0;' +
+            'var hasMeta = body.querySelectorAll("meta[http-equiv=\\"refresh\\"]").length > 0;' +
+            'if (hasScript && (hasNoscript || hasMeta)) {' +
+              'result.level = "captcha"; result.reason = "JS Challenge (body<3KB, no text)";' +
+              'return JSON.stringify(result);' +
+            '}' +
+          '}' +
+        '}' +
+        // 5. 通用验证容器选择器（辅助判断，不单独触发——需配合短页面）
+        'var captchaEls = document.querySelectorAll("[class*=\\"captcha\\"], [id*=\\"captcha\\"], ' +
+          '[class*=\\"verify\\"], [id*=\\"verify\\"], [class*=\\"antibot\\"], #secverify");' +
+        'if (captchaEls.length >= 2) {' +
+          'result.level = "captcha"; result.reason = "验证容器: " + captchaEls.length + "个";' +
+          'return JSON.stringify(result);' +
+        '}' +
+        'return JSON.stringify(result);' +
+      '})()');
+      var parsed = JSON.parse(fp || '{}');
+      if (parsed.level && parsed.level !== 'safe') return parsed;
+      return null;
+    } catch(e) { return null; }
+  }
+
   // ── 扩展状态检测（替换原 detectCaptcha）──
   function detectRiskSignals(html, statusCode, url, taskUrl) {
     var lower = (html || '').toLowerCase();
@@ -1714,6 +1786,7 @@ window.Parser = window.Parser || {};
     renderTags: renderBatchTags,
     detectCaptcha: detectCaptcha,
     detectRiskSignals: detectRiskSignals,
+    detectPageFingerprint: detectPageFingerprint,
     smartClickNext: smartClickNext,
     sleep: sleep,
     updateMergeExportBtn: updateMergeExportBtn,
