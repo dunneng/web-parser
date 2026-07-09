@@ -1147,9 +1147,7 @@ async function registerElements() {
       // 注入 stealth 配置（尽早设置，让 preload 中的 stealth 能读取）
       var host = extractHost(webview.getURL());
       Parser.stealth.injectStealthConfig(host);
-      // 尽早注入原型包装（在页面脚本运行前）
-      var injectScripts3 = Parser.stealth.getStealthScriptsForHost(host).filter(function(id) { return Parser.state.STEALTH_INJECT_IDS.indexOf(id) !== -1; });
-      Parser.stealth.injectStealthPrototypes(injectScripts3);
+      // 原型包装由 CDP 预注入 + dom-ready + did-finish-load 覆盖
       Parser.stealth.applyStealthGlobals(host);
     });
     webview.addEventListener('did-fail-load', (e) => {
