@@ -148,7 +148,9 @@ async function startPythonBackend() {
     pythonProcess = spawn(pythonCmd, [serverPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: path.join(__dirname, 'python'),
-      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8', LANG: 'zh_CN.UTF-8' },
+      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8', LANG: 'zh_CN.UTF-8',
+        VIRTUAL_ENV: '', PYTHONHOME: '',
+        PYTHONPATH: 'C:\\Users\\15534\\AppData\\Roaming\\Python\\Python314\\site-packages' },
     });
   } else if (fs.existsSync(exePath)) {
     console.log('[Python] 使用打包的 python-backend.exe');
