@@ -1209,6 +1209,16 @@ window.Parser = window.Parser || {};
         var realUrl = document.getElementById("webview").getURL();
         console.log('[batchLoadAll] 静态分页 验证URL q:', t.q, 'page:', t.page, '期望:', t.url, '实际:', realUrl);
         if (realUrl && realUrl !== 'about:blank' && realUrl !== t.url) {
+          // 检查是否被重定向到验证/拦截页
+          if (/punish|deny|challenge|captcha|verify|sec_verify|blocked|login\.(taobao|tmall|aliyun)|passport/i.test(realUrl)) {
+            t.status = 'verify'; t.error = '重定向到验证页: ' + realUrl;
+            S.batchLoadPaused = true;
+            document.getElementById("webviewOverlay").classList.add('hidden');
+            document.getElementById('panelRight').scrollIntoView();
+            renderBatchTags();
+            setStatus('🤖 重定向到验证页 — 请手动通过后点击「继续」');
+            break;
+          }
           // webview 没导航到目标 URL，可能是被重定向/缓存——再显式跳一次
           console.warn('[batchLoadAll] ⚠ URL不匹配，重新loadURL:', t.url);
           document.getElementById("webview").loadURL(t.url);
@@ -1244,16 +1254,8 @@ window.Parser = window.Parser || {};
             body: JSON.stringify({url: t.url, html: S.currentHtml})
           });
         } catch(e) {}
-        // URL列表模式：存完快照直接标记完成，跳过提取
-        if (!t.extractMode && !t.selector && !t.chainSchema) {
-          t.status = 'done';
-          t.rowCount = 1;
-          t.results = [{ '页面': t.url, '字符数': (S.currentHtml || '').length }];
-          setStatus('[' + (i+1) + '/' + S.batchTasks.length + '] 快照已存');
-          renderBatchTags();
-          updateBatchFloat();
-          continue;
-        }
+        // ── 多级状态检测（所有模式都做，含URL列表模式）──
+        var isUrlListMode = !t.extractMode && !t.selector && !t.chainSchema;
         if (S.currentHtml) {
           // ── 多级状态检测 ──
           if (!/^local-html:\/\//i.test(t.url)) {
@@ -1307,6 +1309,16 @@ window.Parser = window.Parser || {};
               setStatus('⚠️ ' + risk.reason + ' (' + t._susCount + '/3)，递增等待...');
               await sleep(t._susCount * 5000);
             }
+          }
+          // URL列表模式：检测通过后直接标记完成，跳过提取
+          if (isUrlListMode) {
+            t.status = 'done';
+            t.rowCount = 1;
+            t.results = [{ '页面': t.url, '字符数': (S.currentHtml || '').length }];
+            setStatus('[' + (i+1) + '/' + S.batchTasks.length + '] 快照已存');
+            renderBatchTags();
+            updateBatchFloat();
+            continue;
           }
           // 始终全量解析，存树数据到任务
           var respAll = await fetch('http://127.0.0.1:' + S.pythonPort + '/api/parse/all', {
@@ -1665,6 +1677,18 @@ window.Parser = window.Parser || {};
         'if (captchaEls.length >= 2) {' +
           'result.level = "captcha"; result.reason = "验证容器: " + captchaEls.length + "个";' +
           'return JSON.stringify(result);' +
+        '}' +
+        // 6. body 文本关键词检测（兜底 — 检查当前页面文本，不依赖旧 outerHTML）
+        'var bodyText = (document.body ? document.body.innerText || "" : "").toLowerCase();' +
+        'var captchaKw = ["验证码","captcha","slider","滑块","verify","人机验证","点击完成验证",' +
+          '"请完成安全验证","请稍后重试","访问太过频繁","sec_verify","_af_",' +
+          '"geetest","ali_verify","nc_login","umidToken","x5sec",' +
+          '"__pwv","验证滑动","请按住滑块","安全检测","环境异常","帐号存在异常"];' +
+        'for (var k = 0; k < captchaKw.length; k++) {' +
+          'if (bodyText.indexOf(captchaKw[k]) !== -1) {' +
+            'result.level = "captcha"; result.reason = "页面文本: " + captchaKw[k];' +
+            'return JSON.stringify(result);' +
+          '}' +
         '}' +
         'return JSON.stringify(result);' +
       '})()');
