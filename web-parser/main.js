@@ -145,12 +145,12 @@ async function startPythonBackend() {
     const pythonCmd = process.platform === 'win32'
       ? (fs.existsSync('C:\\Python314\\python.exe') ? 'C:\\Python314\\python.exe' : 'python')
       : 'python3';
-    pythonProcess = spawn(pythonCmd, [serverPath], {
+    const launcherPath = path.join(__dirname, 'python', 'launcher.py');
+    pythonProcess = spawn(pythonCmd, [launcherPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: path.join(__dirname, 'python'),
       env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8', LANG: 'zh_CN.UTF-8',
-        VIRTUAL_ENV: '', PYTHONHOME: '',
-        PYTHONPATH: 'C:\\Users\\15534\\AppData\\Roaming\\Python\\Python314\\site-packages' },
+        VIRTUAL_ENV: '', PYTHONHOME: '' },
     });
   } else if (fs.existsSync(exePath)) {
     console.log('[Python] 使用打包的 python-backend.exe');
