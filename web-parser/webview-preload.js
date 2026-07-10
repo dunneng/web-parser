@@ -106,6 +106,54 @@
       }
     } catch (e) {}
 
+    // 6. navigator.languages 注入补充语言（后羿手法）
+    //    检测脚本可能会检查 languages 数组是否包含中文等常见语言
+    try {
+      var _origLangs = navigator.languages;
+      if (_origLangs && _origLangs.indexOf) {
+        var _toAdd = ['zh-CN', 'zh', 'en', 'ja', 'zh-TW'];
+        _toAdd.forEach(function (l) {
+          if (_origLangs.indexOf(l) === -1) {
+            try { _origLangs.push(l); } catch (e) {}
+          }
+        });
+      }
+    } catch (e) {}
+
+    // 7. String.prototype.startsWith 防检测（后羿手法）
+    //    部分反爬脚本检查 startsWith 是否被篡改过
+    //    保存原版，加载模块时临时切回
+    try {
+      if (!String.prototype.startsWith || String.prototype.startsWith.toString().indexOf('[native code]') === -1) {
+        // 如果已被篡改，从空白 iframe 恢复
+        var _cleanIframe2 = document.createElement('iframe');
+        _cleanIframe2.style.display = 'none';
+        document.documentElement.appendChild(_cleanIframe2);
+        String.prototype.startsWith = _cleanIframe2.contentWindow.String.prototype.startsWith;
+        document.documentElement.removeChild(_cleanIframe2);
+      }
+    } catch (e) {}
+
+    // 8. JSON 隔离（后羿手法）
+    //    从空白 iframe 获取纯净的 JSON.stringify/parse
+    //    防止网站覆盖 JSON 方法来做指纹采集
+    try {
+      var _jsonIframe = document.createElement('iframe');
+      _jsonIframe.style.display = 'none';
+      _jsonIframe.setAttribute('src', 'about:blank');
+      document.body.appendChild(_jsonIframe);
+      if (_jsonIframe.contentWindow && _jsonIframe.contentWindow.JSON) {
+        var _nativeJson = _jsonIframe.contentWindow.JSON;
+        if (!JSON.stringify || JSON.stringify.toString().indexOf('[native code]') === -1) {
+          JSON.stringify = _nativeJson.stringify;
+        }
+        if (!JSON.parse || JSON.parse.toString().indexOf('[native code]') === -1) {
+          JSON.parse = _nativeJson.parse;
+        }
+      }
+      document.body.removeChild(_jsonIframe);
+    } catch (e) {}
+
     // ════════════════════════════════
     //  高级伪装 —— 通过 CDP Page.addScriptToEvaluateOnNewDocument 注入
     //  见 main.js stealth:inject-cdp 和 app.js setupCdpStealthInjection
