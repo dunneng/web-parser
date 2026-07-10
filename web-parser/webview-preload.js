@@ -741,6 +741,223 @@
 
   // 自动 hook
   P.networkInterceptor.hook();
+
+  // ═══════════════════════════════════════════
+  //  文字加密检测 & OCR 解密
+  // ═══════════════════════════════════════════
+  (function () {
+    var ipc = null;
+    try { ipc = require('electron').ipcRenderer; } catch (e) {}
+
+    // 检测加密类型
+    function detectEncryption(el) {
+      var clone = el.cloneNode(true);
+      // 移除图标类小元素
+      var icons = clone.querySelectorAll('i, [class*="icon"], [class*="emoji"]');
+      for (var i = 0; i < icons.length; i++) {
+        if ((icons[i].textContent || '').trim().length <= 1) {
+          icons[i].parentNode && icons[i].parentNode.removeChild(icons[i]);
+        }
+      }
+      var text = (clone.textContent || '').trim();
+
+      // 生僻字检测（自定义字体映射）
+      if (/[\u993c\u9fa4\u9ea3\u9f92\u9a4b\u958f\u9476\u9f64\u9e3a\u9fa5]/.test(text)) {
+        var elFont = getComputedStyle(el).fontFamily;
+        var parentFont = getComputedStyle(el.parentElement || el).fontFamily;
+        if (elFont !== parentFont) return 'CHAR_RARE';
+      }
+
+      // UTF-16 代理对（非 emoji）
+      if (/[\uD800-\uDBFF]/.test(text) && !/[\uD83C-\uD83D]/.test(text)) {
+        return 'CHAR_UTF16';
+      }
+
+      // Unicode 私有区
+      if (/[\uE000-\uF8FF]/.test(text)) {
+        return 'CHAR_UNKNOWN';
+      }
+
+      // 空标签背景图文字（CSS background-image 渲染文字）
+      var children = el.children;
+      var emptyBg = 0, emptyIcon = 0, hasText = 0;
+      for (var i = 0; i < Math.min(children.length, 10); i++) {
+        var child = children[i];
+        var childText = (child.textContent || '').trim();
+        if (childText) {
+          hasText++;
+        } else {
+          var bg = getComputedStyle(child).backgroundImage;
+          if (bg && bg !== 'none' && !/(icon|emoji)/i.test(child.className || '') && child.tagName !== 'I') {
+            emptyBg++;
+          } else if (/(icon|emoji)/i.test(child.className || '')) {
+            emptyIcon++;
+          }
+        }
+      }
+      if (emptyBg > 2 || (emptyBg > 1 && hasText > 0) || (emptyIcon > 2 && hasText === 0)) {
+        return 'TAG_EMPTY';
+      }
+
+      return false;
+    }
+
+    // 准备元素进行截图（放大+白底+固定定位）
+    function prepareDecrypt(el, style) {
+      var origStyle = el.getAttribute('style') || '';
+      el.setAttribute('data-orig-style', origStyle);
+      el.setAttribute('style', style);
+
+      // 确保父元素 z-index/opacity 正常
+      var p = el.parentElement;
+      while (p && p.nodeType === 1) {
+        var zIdx = getComputedStyle(p).zIndex;
+        if (zIdx && zIdx !== 'auto') {
+          p.setAttribute('data-orig-zindex', zIdx);
+          p.style.zIndex = 'auto';
+        }
+        var op = getComputedStyle(p).opacity;
+        if (op && op !== '1') {
+          p.setAttribute('data-orig-opacity', op);
+          p.style.opacity = '1';
+        }
+        p = p.parentElement;
+      }
+    }
+
+    // 恢复元素样式
+    function completeDecrypt(el) {
+      var origStyle = el.getAttribute('data-orig-style');
+      if (origStyle !== null) {
+        el.setAttribute('style', origStyle);
+        el.removeAttribute('data-orig-style');
+      } else {
+        el.removeAttribute('style');
+      }
+      var p = el.parentElement;
+      while (p && p.nodeType === 1) {
+        if (p.hasAttribute('data-orig-zindex')) {
+          p.style.zIndex = p.getAttribute('data-orig-zindex');
+          p.removeAttribute('data-orig-zindex');
+        }
+        if (p.hasAttribute('data-orig-opacity')) {
+          p.style.opacity = p.getAttribute('data-orig-opacity');
+          p.removeAttribute('data-orig-opacity');
+        }
+        p = p.parentElement;
+      }
+    }
+
+    // 获取加密元素的屏幕位置
+    function getRectForEncrypt() {
+      var el = document.querySelector('[data-parser-decrypt]');
+      if (!el) return null;
+      var rect = el.getBoundingClientRect();
+      return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+    }
+
+    // OCR 回调
+    var _decryptCallback = null;
+
+    // 解密单个元素（递归处理子节点）
+    function decryptElement(el, encType) {
+      return new Promise(function (resolve) {
+        if (el.nodeType !== Node.ELEMENT_NODE) { resolve(''); return; }
+
+        // 对子节点递归
+        var promises = [];
+        var childNodes = el.childNodes;
+        for (var i = 0; i < childNodes.length; i++) {
+          var child = childNodes[i];
+          if (child.nodeType === Node.TEXT_NODE) {
+            var text = child.nodeValue || '';
+            if (/[\u993c\u9fa4\u9ea3\u9f92\u9a4b\u958f\u9476\u9f64\u9e3a\u9fa5]/.test(text) ||
+                /[\uE000-\uF8FF]/.test(text) ||
+                /[\uD800-\uDBFF]/.test(text)) {
+              // 对每个可疑字符做 OCR
+              var chars = [];
+              for (var c = 0; c < text.length; c++) {
+                var ch = text[c];
+                if (/[\uD800-\uDBFF]/.test(ch) && c + 1 < text.length) {
+                  ch += text[++c];
+                }
+                if (/[\u993c\u9fa4\u9ea3\u9f92\u9a4b\u958f\u9476\u9f64\u9e3a\u9fa5]/.test(ch) ||
+                    /[\uE000-\uF8FF]/.test(ch) ||
+                    /[\uD800-\uDBFF]/.test(ch)) {
+                  chars.push(ch);
+                }
+              }
+              // 逐个字符做 OCR
+              var charPromises = chars.map(function (ch) {
+                return new Promise(function (resolveChar) {
+                  child.nodeValue = ch;
+                  prepareDecrypt(el,
+                    'position:fixed;left:50%;top:50%;font-size:80px!important;' +
+                    'background:white!important;color:black!important;' +
+                    'outline:30px solid white!important;z-index:99999;' +
+                    'padding:5px;min-width:90px;min-height:90px;line-height:80px;text-align:center;');
+                  el.setAttribute('data-parser-decrypt', 'true');
+
+                  _decryptCallback = function (result) {
+                    completeDecrypt(el);
+                    el.removeAttribute('data-parser-decrypt');
+                    resolveChar(result);
+                  };
+
+                  if (ipc) {
+                    ipc.sendToHost('element-decrypt-request');
+                  } else {
+                    _decryptCallback('');
+                  }
+                });
+              });
+
+              promises.push(Promise.all(charPromises).then(function (results) {
+                // 重新拼回原文
+                var resultIdx = 0;
+                var newText = text;
+                for (var c2 = 0; c2 < text.length; c2++) {
+                  var ch2 = text[c2];
+                  if (/[\uD800-\uDBFF]/.test(ch2) && c2 + 1 < text.length) {
+                    ch2 += text[++c2];
+                  }
+                  if (resultIdx < results.length &&
+                      (/[\u993c\u9fa4\u9ea3\u9f92\u9a4b\u958f\u9476\u9f64\u9e3a\u9fa5]/.test(ch2) ||
+                       /[\uE000-\uF8FF]/.test(ch2) ||
+                       /[\uD800-\uDBFF]/.test(ch2))) {
+                    newText = newText.replace(ch2, results[resultIdx] || ch2);
+                    resultIdx++;
+                  }
+                }
+                child.nodeValue = newText;
+                return newText;
+              }));
+            }
+          } else if (child.nodeType === Node.ELEMENT_NODE) {
+            if (child.tagName !== 'STYLE' && child.tagName !== 'SCRIPT') {
+              promises.push(decryptElement(child, encType));
+            }
+          }
+        }
+        Promise.all(promises).then(function () { resolve(''); });
+      });
+    }
+
+    // 导出到 shenjian 命名空间（兼容后羿 API 格式）
+    var shenjian = window.shenjian || function () { return shenjian; };
+    shenjian.detectEncryption = detectEncryption;
+    shenjian.prepareDecrypt = prepareDecrypt;
+    shenjian.completeDecrypt = completeDecrypt;
+    shenjian.getRectForEncrypt = getRectForEncrypt;
+    shenjian.decryptElement = decryptElement;
+    shenjian.decryptCallback = function (text) {
+      if (_decryptCallback) { var cb = _decryptCallback; _decryptCallback = null; cb(text || ''); }
+    };
+    window.shenjian = shenjian;
+
+    console.log('[Parser] OCR 解密模块已加载');
+  })();
+
   console.log('[Parser] webview-preload loaded');
 
 })();

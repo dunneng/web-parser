@@ -2093,6 +2093,74 @@ async def bg_demo_page():
     with open(demo_path, "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
 
+
+# ═══════════════════════════════════════════
+#  OCR 文字解密 API
+# ═══════════════════════════════════════════
+
+# 懒加载 easyocr（首次请求时才加载模型，避免启动慢）
+_ocr_reader = None
+_ocr_lock = None
+
+def _get_ocr_reader():
+    """懒加载 easyocr Reader（线程安全）"""
+    global _ocr_reader, _ocr_lock
+    if _ocr_lock is None:
+        import threading
+        _ocr_lock = threading.Lock()
+    if _ocr_reader is None:
+        with _ocr_lock:
+            if _ocr_reader is None:
+                import easyocr
+                logging.warning("[OCR] 正在加载 easyocr 模型（首次约需 30s，后续秒级）...")
+                _ocr_reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
+                logging.warning("[OCR] easyocr 模型加载完成")
+    return _ocr_reader
+
+
+class OcrDecodeRequest(BaseModel):
+    image_base64: str  # data:image/png;base64,...
+
+
+@app.post("/api/ocr/decode")
+async def ocr_decode(req: OcrDecodeRequest):
+    """OCR 解密：接收 base64 图片，返回识别出的文本"""
+    try:
+        import base64
+        b64 = req.image_base64
+        if ',' in b64:
+            b64 = b64.split(',', 1)[1]
+        image_bytes = base64.b64decode(b64)
+
+        temp_path = os.path.join(os.path.dirname(__file__), '_ocr_temp.png')
+        with open(temp_path, 'wb') as f:
+            f.write(image_bytes)
+
+        reader = _get_ocr_reader()
+        results = reader.readtext(temp_path)
+
+        try:
+            os.remove(temp_path)
+        except Exception:
+            pass
+
+        if results:
+            best = max(results, key=lambda r: r[2])
+            text = best[1]
+            confidence = best[2]
+            all_text = ''.join(r[1] for r in results)
+            logging.warning(f"[OCR] 识别: '{all_text}' (置信度: {confidence:.2f})")
+            return {"ok": True, "text": all_text, "best": text, "confidence": confidence}
+        else:
+            return {"ok": True, "text": "", "best": "", "confidence": 0}
+
+    except ImportError:
+        return {"ok": False, "error": "easyocr 未安装，请运行: pip install easyocr"}
+    except Exception as e:
+        logging.warning(f"[OCR] 识别失败: {e}")
+        return {"ok": False, "error": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=19527, log_level="warning")

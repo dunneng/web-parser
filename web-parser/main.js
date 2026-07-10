@@ -1156,6 +1156,54 @@ app.on('web-contents-created', (event, contents) => {
         mainWindow.webContents.send('webview:context-menu', params);
       }
     });
+    // OCR 解密：拦截 webview 的 IPC 消息
+    contents.on('ipc-message', async (event, channel, ...args) => {
+      if (channel !== 'element-decrypt-request') return;
+      try {
+        // 获取元素位置并截图
+        var rectScript = 'shenjian().getRectForEncrypt()';
+        var rect = await contents.executeJavaScript(rectScript);
+        if (!rect || !rect.width) {
+          contents.executeJavaScript("shenjian().decryptCallback('')");
+          return;
+        }
+        var sf = contents.getOSProcessId() ? 1 : 1;
+        var captureRect = {
+          x: Math.floor(rect.x * sf) - 10,
+          y: Math.floor(rect.y * sf) - 10,
+          width: Math.ceil(rect.width * sf) + 20,
+          height: Math.ceil(rect.height * sf) + 20
+        };
+        var image = await contents.capturePage(captureRect);
+        var base64 = image.toDataURL();
+        // 调用 Python OCR
+        var http = require('http');
+        var resp = await new Promise(function(resolve, reject) {
+          var body = JSON.stringify({ image_base64: base64 });
+          var req = http.request({
+            hostname: '127.0.0.1', port: 19527, path: '/api/ocr/decode',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+            timeout: 30000
+          }, function(res) {
+            var data = '';
+            res.on('data', function(c) { data += c; });
+            res.on('end', function() { resolve(JSON.parse(data)); });
+          });
+          req.on('error', reject);
+          req.write(body);
+          req.end();
+        });
+        if (resp && resp.ok && resp.best) {
+          contents.executeJavaScript("shenjian().decryptCallback('" + resp.best.replace(/'/g, "\\'") + "')");
+        } else {
+          contents.executeJavaScript("shenjian().decryptCallback('')");
+        }
+      } catch (e) {
+        console.error('[OCR] 解密失败:', e.message);
+        try { contents.executeJavaScript("shenjian().decryptCallback('')"); } catch (_) {}
+      }
+    });
   }
 });
 
