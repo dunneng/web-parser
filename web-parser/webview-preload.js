@@ -165,6 +165,83 @@
   window.__parser = window.__parser || {};
   var P = window.__parser;
 
+  // ──────── 智能滚动（沿 DOM 树向上找可滚动容器）────────
+  P.scrollBySmart = function (x, y, targetEl, steps, interval) {
+    steps = steps || 1;
+    interval = interval || 100;
+    targetEl = targetEl || document.body;
+
+    var _doOne = function (dx, dy) {
+      // 沿 DOM 树向上找第一个可滚动的容器
+      var el = targetEl;
+      var scrolled = false;
+      while (el && el !== document.documentElement && !scrolled) {
+        try {
+          var style = getComputedStyle(el);
+          var oy = style.overflowY;
+          if (el.scrollHeight > el.clientHeight &&
+              (oy === 'auto' || oy === 'scroll' || oy === 'visible')) {
+            el.scrollTop += dy;
+            el.dispatchEvent(new Event('scroll', { bubbles: true }));
+            scrolled = true;
+          }
+        } catch (e) {}
+        el = el.parentElement;
+      }
+      // 兜底：滚 window
+      if (!scrolled) {
+        window.scrollBy(dx, dy);
+        document.dispatchEvent(new Event('scroll', { bubbles: true }));
+      }
+    };
+
+    if (steps <= 1) {
+      _doOne(x, y);
+      return;
+    }
+
+    // 分步滚动（模拟真人，每步间隔 interval ms）
+    var sx = Math.ceil(x / steps);
+    var sy = Math.ceil(y / steps);
+    var count = 0;
+    function _step() {
+      if (count >= steps) return;
+      _doOne(sx, sy);
+      count++;
+      if (count < steps) setTimeout(_step, interval);
+    }
+    _step();
+  };
+
+  P.scrollIntoViewSmart = function (selector) {
+    var el = typeof selector === 'string' ? document.querySelector(selector) : selector;
+    if (!el) return false;
+    // 先找到元素所在的可滚动父容器
+    var p = el.parentElement;
+    while (p && p !== document.documentElement) {
+      try {
+        var style = getComputedStyle(p);
+        var oy = style.overflowY;
+        if (p.scrollHeight > p.clientHeight &&
+            (oy === 'auto' || oy === 'scroll')) {
+          // 把元素滚到容器可见区域
+          var pr = p.getBoundingClientRect();
+          var er = el.getBoundingClientRect();
+          var offset = er.top - pr.top - pr.height * 0.3;
+          if (offset > 0) {
+            p.scrollTop += offset;
+            p.dispatchEvent(new Event('scroll', { bubbles: true }));
+          }
+          return true;
+        }
+      } catch (e) {}
+      p = p.parentElement;
+    }
+    // 兜底：原生 scrollIntoView
+    el.scrollIntoView({ block: 'center', behavior: 'instant' });
+    return true;
+  };
+
   // ──────── 工具函数 ────────
 
   /** 生成元素从目标到根的唯一 CSS 路径 */

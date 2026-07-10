@@ -1579,7 +1579,7 @@ window.Parser = window.Parser || {};
           '  if(!el){return {s:0,e:"not-found"};}' +
           '  var r=el.getBoundingClientRect();' +
           '  if(r.width===0||r.height===0){return {s:0,e:"invisible"};}' +
-          '  el.scrollIntoView({block:"center",behavior:"instant"});' +
+          '  window.__parser.scrollIntoViewSmart(el);' +
           '  var x=r.left+r.width/2, y=r.top+r.height/2;' +
           '  var o={bubbles:true,cancelable:true,view:window,clientX:x,clientY:y};' +
           '  if(typeof PointerEvent!=="undefined"){' +
@@ -1620,7 +1620,7 @@ window.Parser = window.Parser || {};
             '  }' +
             '  // 2c: 检测无限滚动（无按钮的情况）' +
             '  var oldH=Math.max(document.body.scrollHeight,document.documentElement.scrollHeight);' +
-            '  window.scrollTo({top:oldH,behavior:"instant"});' +
+            '  window.__parser.scrollBySmart(0, oldH, document.body, 3, 50);' +
             '  return {s:3,oldH:oldH};' +
             '})(' + JSON.stringify(selector) + ')'
           ).then(function(r2) {
