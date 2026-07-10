@@ -896,6 +896,28 @@ window.Parser = window.Parser || {};
     // 开启资源拦截（拦截图片/样式/字体，加速批量加载）
     try { Blocker.block(Blocker.STATICS); } catch(e) {}
 
+    // 自动打码辅助函数
+    async function tryAutoSolveCaptcha(t, reason) {
+      t.status = 'verify'; t.error = reason;
+      try {
+        if (window.CaptchaSolver && window.CaptchaSolver.enabled) {
+          setStatus('🤖 尝试自动打码...');
+          var solveResult = await window.CaptchaSolver.autoSolve();
+          if (solveResult.solved) {
+            setStatus('✅ 自动打码成功 (' + solveResult.type + ')，继续采集');
+            t.status = 'done';
+            // 等待页面响应
+            await sleep(3000);
+            return true;
+          }
+          console.log('[batch] 自动打码失败:', solveResult.error);
+        }
+      } catch(e) {
+        console.log('[batch] 自动打码异常:', e.message);
+      }
+      return false;
+    }
+
     // 确保预览区可见
     document.getElementById("webviewOverlay").classList.add('hidden');
     document.getElementById("panelRight").style.width = '40%';
@@ -1214,7 +1236,8 @@ window.Parser = window.Parser || {};
         if (realUrl && realUrl !== 'about:blank' && realUrl !== t.url) {
           // 检查是否被重定向到验证/拦截页
           if (/punish|deny|challenge|captcha|verify|sec_verify|blocked|login\.(taobao|tmall|aliyun)|passport/i.test(realUrl)) {
-            t.status = 'verify'; t.error = '重定向到验证页: ' + realUrl;
+            var solved = await tryAutoSolveCaptcha(t, '重定向到验证页: ' + realUrl);
+            if (solved) continue;
             S.batchLoadPaused = true;
             document.getElementById("webviewOverlay").classList.add('hidden');
             document.getElementById('panelRight').scrollIntoView();
@@ -1266,7 +1289,8 @@ window.Parser = window.Parser || {};
             try {
               var fpRisk = await detectPageFingerprint();
               if (fpRisk && fpRisk.level === 'captcha') {
-                t.status = 'verify'; t.error = fpRisk.reason;
+                var solved2 = await tryAutoSolveCaptcha(t, fpRisk.reason);
+                if (solved2) continue;
                 S.batchLoadPaused = true;
                 document.getElementById("webviewOverlay").classList.add('hidden');
                 document.getElementById('panelRight').scrollIntoView();
@@ -1292,7 +1316,8 @@ window.Parser = window.Parser || {};
               break;
             }
             if (risk.level === 'captcha') {
-              t.status = 'verify'; t.error = risk.reason;
+              var solved3 = await tryAutoSolveCaptcha(t, risk.reason);
+              if (solved3) continue;
               S.batchLoadPaused = true;
               document.getElementById("webviewOverlay").classList.add('hidden');
               document.getElementById('panelRight').scrollIntoView();
@@ -1303,7 +1328,8 @@ window.Parser = window.Parser || {};
             if (risk.level === 'suspicious') {
               t._susCount = (t._susCount || 0) + 1;
               if (t._susCount >= 3) {
-                t.status = 'verify'; t.error = '连续访问受限: ' + risk.reason;
+                var solved4 = await tryAutoSolveCaptcha(t, '连续访问受限: ' + risk.reason);
+                if (solved4) continue;
                 S.batchLoadPaused = true;
                 renderBatchTags();
                 setStatus('⚠️ 连续访问受限 — 已暂停');
