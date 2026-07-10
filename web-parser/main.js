@@ -1056,6 +1056,72 @@ ipcMain.handle('tab-browser:close', async () => {
   return { ok: true };
 });
 
+// ──────── 资源拦截器（加速模式）────────
+
+let _blockerLevel = 0;
+
+// 资源类型 → 分类常量
+function classifyResourceType(resourceType) {
+  switch (resourceType) {
+    case 'image':       return 1;    // IMAGE
+    case 'stylesheet':  return 2;    // STYLE
+    case 'font':        return 4;    // FONT
+    case 'media':       return 8;    // MEDIA
+    case 'script':      return 16;   // SCRIPT
+    case 'xhr':
+    case 'fetch':       return 32;   // XHR
+    case 'mainFrame':
+    case 'subFrame':    return 0;    // 永不过滤页面本身
+    default:            return 0;
+  }
+}
+
+function applyBlocker() {
+  var sess = session.defaultSession;
+  try {
+    // 先清除旧的拦截器
+    sess.webRequest.onBeforeRequest(null);
+  } catch (e) {}
+
+  if (_blockerLevel === 0) {
+    console.log('[Blocker] 已关闭');
+    return;
+  }
+
+  var filter = { urls: ['*://*/*'] };
+  sess.webRequest.onBeforeRequest(filter, function (details, callback) {
+    var cat = classifyResourceType(details.resourceType);
+    // 按 URL 后缀兜底（Electron 可能不传 resourceType）
+    if (cat === 0) {
+      var url = (details.url || '').toLowerCase();
+      if (/\.(png|jpe?g|gif|svg|webp|ico|bmp)(\?|$)/i.test(url))        cat = 1;
+      else if (/\.(css|less|scss)(\?|$)/i.test(url))                     cat = 2;
+      else if (/\.(woff2?|ttf|eot|otf)(\?|$)/i.test(url))               cat = 4;
+      else if (/\.(mp[34]|webm|ogg|avi|mov|flv)(\?|$)/i.test(url))      cat = 8;
+      else if (/\.(js|mjs)(\?|$)/i.test(url))                            cat = 16;
+    }
+    if (cat & _blockerLevel) {
+      callback({ cancel: true });
+    } else {
+      callback({});
+    }
+  });
+
+  var names = [];
+  if (_blockerLevel & 1)  names.push('图片');
+  if (_blockerLevel & 2)  names.push('样式');
+  if (_blockerLevel & 4)  names.push('字体');
+  if (_blockerLevel & 8)  names.push('媒体');
+  if (_blockerLevel & 16) names.push('脚本');
+  if (_blockerLevel & 32) names.push('XHR');
+  console.log('[Blocker] 拦截: ' + names.join(','));
+}
+
+ipcMain.on('blocker:set', function (event, data) {
+  _blockerLevel = data.level || 0;
+  applyBlocker();
+});
+
 // ──────── 应用生命周期 ────────
 
 // 全局拦截：弹窗 + 右键菜单（包括 webview 内部）

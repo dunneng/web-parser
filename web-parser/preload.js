@@ -105,6 +105,9 @@ contextBridge.exposeInMainWorld('api', {
   proxySet: (config) => ipcRenderer.invoke('proxy:set', config),
   proxyGet: () => ipcRenderer.invoke('proxy:get'),
 
+  // Blocker — 资源拦截
+  blockerSet: (level) => ipcRenderer.send('blocker:set', { level: level }),
+
   // 应用退出前清理
   onCleanup: (callback) => ipcRenderer.on('app:cleanup', callback),
 });

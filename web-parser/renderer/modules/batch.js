@@ -893,6 +893,9 @@ window.Parser = window.Parser || {};
     var MAX_RETRIES = S.batchTasks.length > 50 ? 1 : 3;  // 大批量减少重试
     var RETRY_DELAY = 2000;
 
+    // 开启资源拦截（拦截图片/样式/字体，加速批量加载）
+    try { Blocker.block(Blocker.STATICS); } catch(e) {}
+
     // 确保预览区可见
     document.getElementById("webviewOverlay").classList.add('hidden');
     document.getElementById("panelRight").style.width = '40%';
@@ -1406,6 +1409,8 @@ window.Parser = window.Parser || {};
     document.getElementById("btnBatchLoadAll").style.background = '';
     document.getElementById("btnBatchLoadAll").style.borderColor = '';
     document.getElementById("btnBatchLoadAll").style.color = '';
+    // 关闭资源拦截
+    try { Blocker.clear(); } catch(e) {}
     renderBatchTags();
     updateBatchFloat();
     if (S.batchLoadCancel) {
