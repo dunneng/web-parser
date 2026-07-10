@@ -2099,23 +2099,23 @@ async def bg_demo_page():
 # ═══════════════════════════════════════════
 
 # 懒加载 easyocr（首次请求时才加载模型，避免启动慢）
-_ocr_reader = None
+_ocr = None
 _ocr_lock = None
 
-def _get_ocr_reader():
+def _get_ocr():
     """懒加载 easyocr Reader（线程安全）"""
-    global _ocr_reader, _ocr_lock
+    global _ocr, _ocr_lock
     if _ocr_lock is None:
         import threading
         _ocr_lock = threading.Lock()
-    if _ocr_reader is None:
+    if _ocr is None:
         with _ocr_lock:
-            if _ocr_reader is None:
+            if _ocr is None:
                 import easyocr
                 logging.warning("[OCR] 正在加载 easyocr 模型（首次约需 30s，后续秒级）...")
-                _ocr_reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
+                _ocr = easyocr.Reader(['ch_sim', 'en'], gpu=False)
                 logging.warning("[OCR] easyocr 模型加载完成")
-    return _ocr_reader
+    return _ocr
 
 
 class OcrDecodeRequest(BaseModel):
@@ -2126,17 +2126,17 @@ class OcrDecodeRequest(BaseModel):
 async def ocr_decode(req: OcrDecodeRequest):
     """OCR 解密：接收 base64 图片，返回识别出的文本"""
     try:
-        import base64
+        import base64, tempfile
         b64 = req.image_base64
         if ',' in b64:
             b64 = b64.split(',', 1)[1]
         image_bytes = base64.b64decode(b64)
 
-        temp_path = os.path.join(os.path.dirname(__file__), '_ocr_temp.png')
-        with open(temp_path, 'wb') as f:
-            f.write(image_bytes)
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+            tmp.write(image_bytes)
+            temp_path = tmp.name
 
-        reader = _get_ocr_reader()
+        reader = _get_ocr()
         results = reader.readtext(temp_path)
 
         try:
