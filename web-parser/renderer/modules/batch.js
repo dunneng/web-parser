@@ -1765,13 +1765,18 @@ window.Parser = window.Parser || {};
     if (statusCode === 503) return {level:'blocked', reason:'HTTP 503', action:'pause_and_retry'};
     if (statusCode>=400 && statusCode<500) return {level:'blocked', reason:'HTTP '+statusCode, action:'skip'};
     if (len>0 && len<200) return {level:'suspicious', reason:'内容过短('+len+'字符)', action:'retry'};
+    // 剥离 <script> / <style> / <noscript> / 注释，避免 JS 代码中的关键词误报
+    var cleanLower = lower.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '')
+      .replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '')
+      .replace(/<noscript[^>]*>[\\s\\S]*?<\\/noscript>/gi, '')
+      .replace(/<!--[\\s\\S]*?-->/g, '');
     // 验证码关键词
     var captchaKw=['验证码','captcha','slider','滑块','verify','人机验证','点击完成验证',
       '请完成安全验证','请稍后重试','访问太过频繁','sec_verify','_af_',
       'geetest','ali_verify','nc_login','umidToken','x5sec',
       '__pwv','验证滑动','请按住滑块','安全检测','环境异常','帐号存在异常'];
     for (var i=0;i<captchaKw.length;i++) {
-      if (lower.indexOf(captchaKw[i])!==-1) return {level:'captcha', reason:'检测到验证:'+captchaKw[i], action:'pause'};
+      if (cleanLower.indexOf(captchaKw[i])!==-1) return {level:'captcha', reason:'检测到验证:'+captchaKw[i], action:'pause'};
     }
     // 跳转登录
     var loginKw=['login','登录','signin','请先登录','account/login','passport'];
