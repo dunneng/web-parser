@@ -2161,6 +2161,203 @@ async def ocr_decode(req: OcrDecodeRequest):
         return {"ok": False, "error": str(e)}
 
 
+# ═══════════════════════════════════════════
+#  页面验证 API — 闭环判断页面是否恢复正常
+# ═══════════════════════════════════════════
+
+class VerifyPageRequest(BaseModel):
+    html: str
+    url: str = ""
+    task_url: str = ""       # 原始目标 URL
+    chain_schema: dict = None  # 链路提取规则（可选，用于结构化验证）
+
+
+@app.post("/api/verify/page")
+async def verify_page(req: VerifyPageRequest):
+    """
+    验证页面是否正常（非验证页/拦截页/登录页）。
+    返回 status + confidence + 各检查项明细。
+    """
+    from bs4 import BeautifulSoup
+    import re
+
+    html = req.html or ""
+    url = req.url or ""
+    task_url = req.task_url or ""
+    soup = BeautifulSoup(html, 'html.parser')
+    body_text = soup.get_text() if soup.body else ""
+    body_lower = body_text.lower()
+    html_len = len(html)
+
+    checks = {}
+
+    # ── 1. 内容长度检查 ──
+    # 正常商品页面通常 > 10KB，验证页通常 < 3KB
+    checks["content_length"] = {
+        "passed": html_len > 3000,
+        "value": html_len,
+        "threshold": 3000
+    }
+
+    # ── 2. 结构性验证：检查是否有足够多的"卡片"元素 ──
+    # 商品列表页特征：多个重复的同类元素（li, div.card, .item 等）
+    card_candidates = soup.select(
+        'li[class], div[class*="item"], div[class*="card"], div[class*="product"], '
+        'div[class*="list"] > div, ul[class] > li, .grid > div, '
+        'div[class*="result"], div[class*="sku"], div[class*="goods"]'
+    )
+    # 去重：按 class 分组，找数量最多的组
+    class_groups = {}
+    for el in card_candidates:
+        cls = ' '.join(el.get('class', []))
+        if len(cls) > 2 and len(cls) < 80:
+            class_groups[cls] = class_groups.get(cls, 0) + 1
+    max_similar = max(class_groups.values()) if class_groups else 0
+    checks["product_cards"] = {
+        "passed": max_similar >= 3,
+        "value": max_similar,
+        "threshold": 3
+    }
+
+    # ── 3. 页面标题检查 ──
+    title = (soup.title.string if soup.title else "").lower()
+    captcha_titles = [
+        "just a moment", "安全检查", "验证", "verify you are",
+        "attention required", "security check", "blocked", "access denied",
+        "拦截", "限制"
+    ]
+    title_hit = [t for t in captcha_titles if t in title]
+    checks["title"] = {
+        "passed": len(title_hit) == 0,
+        "value": title[:80],
+        "hits": title_hit
+    }
+
+    # ── 4. 验证码关键词检查 ──
+    captcha_kw = [
+        "验证码", "captcha", "slider", "滑块", "verify",
+        "人机验证", "点击完成验证", "请完成安全验证",
+        "请稍后重试", "访问太过频繁", "sec_verify", "_af_",
+        "geetest", "ali_verify", "nc_login", "umidToken", "x5sec",
+        "__pwv", "验证滑动", "请按住滑块", "安全检测",
+        "环境异常", "帐号存在异常", "challenge-platform",
+        "recaptcha", "hcaptcha", "arkoselabs", "funcaptcha"
+    ]
+    kw_hits = [kw for kw in captcha_kw if kw in body_lower]
+    checks["captcha_keywords"] = {
+        "passed": len(kw_hits) == 0,
+        "hits": kw_hits
+    }
+
+    # ── 5. 登录重定向检查 ──
+    login_kw = ["login", "登录", "signin", "请先登录", "passport"]
+    url_lower = url.lower()
+    task_lower = task_url.lower()
+    # 检查当前 URL 是否有登录关键词，而原始任务 URL 没有
+    login_url_hits = [kw for kw in login_kw if kw in url_lower and kw not in task_lower]
+    # 检查页面内容是否有大量登录元素
+    login_forms = soup.select('input[type="password"]')
+    login_page_text = any(kw in body_lower for kw in ["登录", "sign in", "密码", "password"])
+    checks["login_redirect"] = {
+        "passed": len(login_url_hits) == 0 and not (len(login_forms) >= 1 and login_page_text),
+        "url_hits": login_url_hits,
+        "password_inputs": len(login_forms),
+        "login_text": login_page_text
+    }
+
+    # ── 6. iframe 验证平台检查 ──
+    iframes = soup.find_all('iframe')
+    verify_iframes = []
+    for ifr in iframes:
+        src = (ifr.get('src') or '').lower()
+        if any(p in src for p in ['recaptcha', 'hcaptcha', 'challenge', 'arkoselabs',
+                                    'funcaptcha', 'geetest', 'verify.aliyuncs']):
+            verify_iframes.append(src[:100])
+    checks["verify_iframes"] = {
+        "passed": len(verify_iframes) == 0,
+        "hits": verify_iframes
+    }
+
+    # ── 7. 链路规则验证（如果提供了 schema）──
+    chain_check = {"passed": True, "applied": False}
+    if req.chain_schema and isinstance(req.chain_schema, dict):
+        chain_check["applied"] = True
+        # 简单的字段路径检查：schema 里如果有 selector，检查页面是否有匹配元素
+        schema = req.chain_schema
+        for field_name, field_info in schema.items():
+            if isinstance(field_info, dict) and field_info.get("selector"):
+                sel = field_info["selector"]
+                try:
+                    matches = len(soup.select(sel))
+                    if matches == 0:
+                        chain_check["passed"] = False
+                        chain_check.setdefault("missing_fields", []).append(field_name)
+                except Exception:
+                    pass
+        if chain_check.get("passed", True):
+            chain_check["message"] = "链路规则匹配成功"
+        else:
+            chain_check["message"] = f"缺失字段: {', '.join(chain_check.get('missing_fields', []))}"
+
+    # ── 综合判定 ──
+    weight_map = {
+        "content_length": 0.15,
+        "product_cards": 0.20,
+        "title": 0.15,
+        "captcha_keywords": 0.25,
+        "login_redirect": 0.10,
+        "verify_iframes": 0.10,
+        "chain_check": 0.15 if chain_check["applied"] else 0,
+    }
+
+    # 重新分配权重（根据 chain_check 是否生效动态调整）
+    total_weight = sum(weight_map.values())
+    passed_score = 0
+    for check_name, weight in weight_map.items():
+        if check_name in checks and checks[check_name]["passed"]:
+            passed_score += weight
+
+    confidence = round(passed_score / total_weight, 2) if total_weight > 0 else 0
+
+    # 判定状态
+    if confidence >= 0.7:
+        status = "normal"
+        reason = f"页面正常 (置信度 {confidence:.0%}, {html_len} 字符"
+        if max_similar > 0:
+            reason += f", {max_similar} 个卡片"
+        reason += ")"
+    elif confidence >= 0.4:
+        status = "uncertain"
+        failed = [k for k, v in checks.items() if not v["passed"]]
+        reason = f"页面状态不确定: {', '.join(failed[:3])}"
+    else:
+        # 判断具体类型
+        if not checks["captcha_keywords"]["passed"]:
+            status = "captcha"
+            reason = f"检测到验证: {checks['captcha_keywords']['hits']}"
+        elif not checks["login_redirect"]["passed"]:
+            status = "redirected"
+            reason = "重定向到登录页"
+        elif not checks["content_length"]["passed"]:
+            status = "blocked"
+            reason = f"页面内容过短 ({html_len} 字符)"
+        else:
+            status = "captcha"
+            reason = "页面验证未通过"
+
+    logging.warning(
+        f"[Verify] status={status} confidence={confidence:.2f} "
+        f"len={html_len} cards={max_similar} kw={kw_hits[:3] if kw_hits else 'none'}"
+    )
+
+    return {
+        "status": status,
+        "confidence": confidence,
+        "reason": reason,
+        "checks": checks
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=19527, log_level="warning")

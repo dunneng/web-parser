@@ -1909,31 +1909,47 @@ window.Parser = window.Parser || {};
 
       switch (recovery.type) {
         case 'poll_dom':
-          try {
-            var sel = (recovery.target || 'body').replace(/"/g, '\\"');
-            wv.executeJavaScript(
-              '(function(){var els=document.querySelectorAll("' + sel + '");' +
-              'if(els.length===0){var t=(document.body?document.body.innerText||"":"");' +
-              'return t.length>200?"ok:"+t.length:"short";}return "still";})()'
-            ).then(function(r) {
-              if (r && r.indexOf('ok:') === 0) handleRecovery(t);
-              else if (r === 'still') {
-                updateBatchNotify({ countdown: Math.ceil((recovery.timeout - (Date.now() - startTime)) / 1000) });
-              }
-            }).catch(function(){});
-          } catch(e) {}
-          break;
-
         case 'poll_url':
-          var currentUrl = wv.getURL();
-          if (currentUrl && currentUrl !== 'about:blank') {
-            var curHost = currentUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-            var tgtHost = (_recoveryTargetUrl || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-            if (curHost === tgtHost && !/login|passport|captcha|verify/i.test(currentUrl)) {
-              handleRecovery(t);
-              return;
-            }
-          }
+          // 统一用 API 验证：获取当前页面 HTML，POST 到 Python 后端分析
+          try {
+            wv.executeJavaScript('document.documentElement.outerHTML').then(async function(html) {
+              if (!html || html.length < 100) return;  // 页面尚未加载
+              var currentUrl = wv.getURL();
+              var resp = await fetch('http://127.0.0.1:' + S.pythonPort + '/api/verify/page', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                  html: html,
+                  url: currentUrl || '',
+                  task_url: _recoveryTargetUrl || t.url || '',
+                  chain_schema: t.chainSchema || null
+                })
+              });
+              var v = await resp.json();
+              console.log('[batch] API 验证:', v.status, '置信度:', v.confidence,
+                '卡片:', v.checks.product_cards.value,
+                '标题:', v.checks.title.value,
+                '关键词:', v.checks.captcha_keywords.hits,
+                '登录:', v.checks.login_redirect.passed ? '否' : '是',
+                'iframe:', v.checks.verify_iframes.hits);
+              if (v.status === 'normal' && v.confidence >= 0.7) {
+                handleRecovery(t);
+              } else if (v.status === 'uncertain' && v.confidence >= 0.5) {
+                // 大概率正常但不够确定，降低轮询间隔继续等
+                recovery.pollInterval = Math.min((recovery.pollInterval || 2000) * 2, 8000);
+                updateBatchNotify({
+                  countdown: Math.ceil((recovery.timeout - (Date.now() - startTime)) / 1000),
+                  instruction: 'API 验证: ' + v.reason + ' (置信度 ' + Math.round(v.confidence*100) + '%)'
+                });
+              } else {
+                updateBatchNotify({
+                  countdown: Math.ceil((recovery.timeout - (Date.now() - startTime)) / 1000),
+                  instruction: 'API 验证: ' + v.reason
+                });
+              }
+            }).catch(function(e) {
+              console.log('[batch] API 验证异常:', e.message);
+            });
+          } catch(e) {}
           break;
 
         case 'wait_fixed':
