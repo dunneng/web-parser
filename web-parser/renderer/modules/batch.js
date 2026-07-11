@@ -1765,11 +1765,12 @@ window.Parser = window.Parser || {};
     if (statusCode === 503) return {level:'blocked', reason:'HTTP 503', action:'pause_and_retry'};
     if (statusCode>=400 && statusCode<500) return {level:'blocked', reason:'HTTP '+statusCode, action:'skip'};
     if (len>0 && len<200) return {level:'suspicious', reason:'内容过短('+len+'字符)', action:'retry'};
-    // 剥离 <script> / <style> / <noscript> / 注释，避免 JS 代码中的关键词误报
-    var cleanLower = lower.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '')
-      .replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '')
-      .replace(/<noscript[^>]*>[\\s\\S]*?<\\/noscript>/gi, '')
-      .replace(/<!--[\\s\\S]*?-->/g, '');
+    // 剥离 <script> / <style> / <noscript> / 注释 / HTML标签，只留文本
+    var cleanLower = lower.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '')
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<[^>]+>/g, ' ');  // 移除所有 HTML 标签
     // 验证码关键词
     var captchaKw=['验证码','captcha','slider','滑块','verify','人机验证','点击完成验证',
       '请完成安全验证','请稍后重试','访问太过频繁','sec_verify','_af_',
