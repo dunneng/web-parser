@@ -890,6 +890,43 @@ select option {
   font-weight: 600;
 }
 
+/* ──────── 批量验证通知条 ──────── */
+.batch-notify-banner {
+  position: fixed;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999999;
+  padding: 10px 24px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+  animation: bnSlideUp 0.3s ease;
+  max-width: 90vw;
+  white-space: nowrap;
+}
+@keyframes bnSlideUp {
+  from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+.batch-notify-banner .bn-icon { font-size: 16px; flex-shrink: 0; }
+.batch-notify-banner .bn-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.batch-notify-banner .bn-countdown {
+  font-weight: 700; font-size: 14px; min-width: 36px; text-align: center; flex-shrink: 0;
+}
+.batch-notify-banner .bn-continue {
+  padding: 4px 14px; border: 1px solid rgba(255,255,255,0.5);
+  border-radius: 4px; background: rgba(255,255,255,0.15);
+  color: #fff; cursor: pointer; font-size: 12px; font-weight: 600;
+  flex-shrink: 0; transition: background 0.2s;
+}
+.batch-notify-banner .bn-continue:hover { background: rgba(255,255,255,0.3); }
+
 /* ──────── 元素提取模式切换 ──────── */
 .picker-mode-switch {
   display: inline-flex;

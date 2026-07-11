@@ -1236,13 +1236,13 @@ window.Parser = window.Parser || {};
         if (realUrl && realUrl !== 'about:blank' && realUrl !== t.url) {
           // 检查是否被重定向到验证/拦截页
           if (/punish|deny|challenge|captcha|verify|sec_verify|blocked|login\.(taobao|tmall|aliyun)|passport/i.test(realUrl)) {
-            var solved = await tryAutoSolveCaptcha(t, '重定向到验证页: ' + realUrl);
-            if (solved) continue;
+            var urlDetect = buildDetection('captcha', 'URL 重定向到验证页: ' + realUrl);
+            var urlSolved = await tryAutoSolveCaptcha(t, urlDetect.reason);
+            if (urlSolved) continue;
             S.batchLoadPaused = true;
             document.getElementById("webviewOverlay").classList.add('hidden');
-            document.getElementById('panelRight').scrollIntoView();
             renderBatchTags();
-            setStatus('🤖 重定向到验证页 — 请手动通过后点击「继续」');
+            startRecoveryMonitor(t, urlDetect);
             break;
           }
           // webview 没导航到目标 URL，可能是被重定向/缓存——再显式跳一次
@@ -1283,64 +1283,90 @@ window.Parser = window.Parser || {};
         // ── 多级状态检测（所有模式都做，含URL列表模式）──
         var isUrlListMode = !t.extractMode && !t.selector && !t.chainSchema;
         if (S.currentHtml) {
-          // ── 多级状态检测 ──
           if (!/^local-html:\/\//i.test(t.url)) {
-            // 步骤 1: 页面指纹检测（DOM 结构、iframe、标题等，不依赖关键词）
+            // 步骤 1: 页面指纹检测 → 结构化诊断
+            var detection = null;
             try {
               var fpRisk = await detectPageFingerprint();
               if (fpRisk && fpRisk.level === 'captcha') {
-                var solved2 = await tryAutoSolveCaptcha(t, fpRisk.reason);
-                if (solved2) continue;
-                S.batchLoadPaused = true;
-                document.getElementById("webviewOverlay").classList.add('hidden');
-                document.getElementById('panelRight').scrollIntoView();
-                renderBatchTags();
-                setStatus('🤖 验证页: ' + fpRisk.reason + ' — 请手动通过后点击「继续」');
-                break;
+                detection = buildDetection('captcha', fpRisk.reason);
               }
             } catch(_) {}
             // 步骤 2: 关键词检测（兜底）
-            var risk = detectRiskSignals(S.currentHtml, 0, (cnCurrentUrl||t.url), t.url);
-            if (risk.level === 'blocked') {
-              t.status = 'blocked'; t.error = risk.reason;
-              S.batchLoadPaused = true;
-              renderBatchTags();
-              setStatus('❌ 被拦截: ' + risk.reason + ' — 已暂停，请检查代理/网络');
-              break;
+            if (!detection) {
+              var risk = detectRiskSignals(S.currentHtml, 0, (cnCurrentUrl||t.url), t.url);
+              if (risk.level !== 'safe') {
+                detection = buildDetection(risk.level, risk.reason);
+              }
             }
-            if (risk.level === 'redirected') {
-              t.status = 'redirected'; t.error = risk.reason;
-              S.batchLoadPaused = true;
-              renderBatchTags();
-              setStatus('🔐 ' + risk.reason + ' — 需要手动登录');
-              break;
-            }
-            if (risk.level === 'captcha') {
-              var solved3 = await tryAutoSolveCaptcha(t, risk.reason);
-              if (solved3) continue;
-              S.batchLoadPaused = true;
-              document.getElementById("webviewOverlay").classList.add('hidden');
-              document.getElementById('panelRight').scrollIntoView();
-              renderBatchTags();
-              setStatus('🤖 遇到验证: ' + risk.reason + ' — 请手动通过后点击「继续」');
-              break;
-            }
-            if (risk.level === 'suspicious') {
-              t._susCount = (t._susCount || 0) + 1;
-              if (t._susCount >= 3) {
-                var solved4 = await tryAutoSolveCaptcha(t, '连续访问受限: ' + risk.reason);
-                if (solved4) continue;
+            // ── 处理检测结果：自动修复 → 浮动通知 → 恢复监控 ──
+            if (detection) {
+              t.status = 'verify'; t.error = detection.reason;
+              // 尝试自动打码
+              if (detection.level === 'captcha') {
+                var solved = await tryAutoSolveCaptcha(t, detection.reason);
+                if (solved) { t.status = 'done'; continue; }
+              }
+              // 执行前置检查（如 Cookie 注入）
+              var preChecked = false;
+              if (detection.recovery && detection.recovery.preCheck) {
+                preChecked = await detection.recovery.preCheck(t);
+                if (preChecked) {
+                  // preCheck 已触发重新加载，等待加载完毕
+                  setStatus('正在注入 Cookie 并重新加载...');
+                  await new Promise(function(resolve) {
+                    var wv = document.getElementById('webview');
+                    function onLoad() { wv.removeEventListener('did-finish-load', onLoad); setTimeout(resolve, 1500); }
+                    wv.addEventListener('did-finish-load', onLoad);
+                    setTimeout(function() { wv.removeEventListener('did-finish-load', onLoad); resolve(); }, 15000);
+                  });
+                  // 重新检查是否恢复
+                  var reUrl = document.getElementById('webview').getURL();
+                  if (reUrl && !/login|passport|captcha|verify/i.test(reUrl)) {
+                    setStatus('OK，Cookie 注入成功，继续采集 [' + (t.q || t.url) + ']');
+                    S.currentHtml = await document.getElementById('webview').executeJavaScript('document.documentElement.outerHTML');
+                    detection = null;
+                  } else {
+                    setStatus('Cookie 注入无效，仍需手动登录 [' + (t.q || t.url) + ']');
+                    detection.recovery.preCheck = null;
+                  }
+                }
+              }
+              // 仍未解决 → 暂停 + 浮动通知 + 恢复监控
+              if (detection) {
                 S.batchLoadPaused = true;
+                t.status = detection.level === 'blocked' ? 'blocked' :
+                           detection.level === 'redirected' ? 'redirected' : 'verify';
+                document.getElementById("webviewOverlay").classList.add('hidden');
                 renderBatchTags();
-                setStatus('⚠️ 连续访问受限 — 已暂停');
+                startRecoveryMonitor(t, detection);
                 break;
               }
-              setStatus('⚠️ ' + risk.reason + ' (' + t._susCount + '/3)，递增等待...');
+            }
+            // 可疑但非阻断 → 计数等待
+            if (detection && detection.level === 'suspicious') {
+              t._susCount = (t._susCount || 0) + 1;
+              if (t._susCount >= 3) {
+                S.batchLoadPaused = true;
+                renderBatchTags();
+                startRecoveryMonitor(t, buildDetection('suspicious', '连续访问受限 (3/3)'));
+                break;
+              }
+              setStatus('⚠️ ' + detection.reason + ' (第' + t._susCount + '次)，递增等待...');
               await sleep(t._susCount * 5000);
             }
           }
           // URL列表模式：检测通过后直接标记完成，跳过提取
-          if (isUrlListMode) {
+          if (isUrlListMode && !detection) {
+            t.status = 'done';
+            t.rowCount = 1;
+            t.results = [{ '页面': t.url, '字符数': (S.currentHtml || '').length }];
+            setStatus('[' + (i+1) + '/' + S.batchTasks.length + '] 快照已存');
+            renderBatchTags();
+            updateBatchFloat();
+            continue;
+          }
+          if (detection) { /* skip parse, handled above */ } else {
             t.status = 'done';
             t.rowCount = 1;
             t.results = [{ '页面': t.url, '字符数': (S.currentHtml || '').length }];
@@ -1762,6 +1788,236 @@ window.Parser = window.Parser || {};
     }
     return {level:'safe', reason:'', action:'continue'};
   }
+
+  // ═══════════════════════════════════════════════
+  //  结构化检测 + 自动恢复监控 + 浮动通知
+  // ═══════════════════════════════════════════════
+
+  // 每个检测点的恢复策略定义
+  var RECOVERY_STRATEGIES = {
+    CF_CHALLENGE: {
+      type: 'poll_dom',
+      target: '#challenge-stage, #cf-challenge, .cf-browser-verify, [class*="cf-turnstile"]',
+      check: 'absent',
+      timeout: 15000,
+      pollInterval: 1000,
+      instruction: '等待 Cloudflare 安全检查自动通过（通常 5 秒）'
+    },
+    TAOBAO_LOGIN: {
+      type: 'poll_url',
+      check: 'url_back',
+      timeout: 120000,
+      pollInterval: 3000,
+      instruction: '请扫码登录淘宝账号',
+      preCheck: async function(t) {
+        try {
+          if (window.api && window.api.cookieLoad) {
+            var r = await window.api.cookieLoad(t.url);
+            if (r && r.count > 0) {
+              console.log('[batch] Cookie预检: 已加载 ' + r.count + ' 条，重新加载页面');
+              document.getElementById('webview').loadURL(t.url);
+              return true;
+            }
+          }
+        } catch(e) { console.log('[batch] Cookie预检异常:', e.message); }
+        return false;
+      }
+    },
+    SLIDER_CAPTCHA: {
+      type: 'poll_dom',
+      target: '.geetest_panel, .nc_wrapper, #nc_1_n1z, [id*="captcha"], [class*="captcha"]',
+      check: 'absent',
+      timeout: 60000,
+      pollInterval: 2000,
+      instruction: '请拖动滑块完成验证'
+    },
+    FREQUENT_LIMIT: {
+      type: 'wait_fixed',
+      waitMs: 30000,
+      instruction: '访问太频繁，自动降速等待 30 秒后重试'
+    },
+    HTTP_BLOCKED: {
+      type: 'manual',
+      instruction: 'IP 可能被拉黑，建议切换代理/网络后点击继续'
+    },
+    GENERIC_VERIFY: {
+      type: 'poll_dom',
+      target: '[class*="verify"], [id*="verify"], [class*="antibot"]',
+      check: 'absent',
+      timeout: 60000,
+      pollInterval: 2000,
+      instruction: '页面触发了验证，请完成验证后自动继续'
+    }
+  };
+
+  // 从检测结果生成结构化诊断：{code, reason, instruction, level, recovery}
+  function buildDetection(category, reason) {
+    var d = { level: category, reason: reason, instruction: '', recovery: null, code: '' };
+    var rLower = (reason || '').toLowerCase();
+    if (/cloudflare|cf-challenge|cf-browser|turnstile|just a moment/i.test(rLower)) {
+      d.code = 'CF_CHALLENGE';
+      d.instruction = RECOVERY_STRATEGIES.CF_CHALLENGE.instruction;
+      d.recovery = Object.assign({}, RECOVERY_STRATEGIES.CF_CHALLENGE);
+    } else if (/login\.(taobao|tmall|aliyun)|passport/i.test(rLower)) {
+      d.code = 'TAOBAO_LOGIN';
+      d.instruction = RECOVERY_STRATEGIES.TAOBAO_LOGIN.instruction;
+      d.recovery = Object.assign({}, RECOVERY_STRATEGIES.TAOBAO_LOGIN);
+    } else if (/滑块|slider|geetest|nc_login|验证滑动/i.test(rLower)) {
+      d.code = 'SLIDER_CAPTCHA';
+      d.instruction = RECOVERY_STRATEGIES.SLIDER_CAPTCHA.instruction;
+      d.recovery = Object.assign({}, RECOVERY_STRATEGIES.SLIDER_CAPTCHA);
+    } else if (/频繁|太过频繁|限流|429|访问限制标记/i.test(rLower)) {
+      d.code = 'FREQUENT_LIMIT';
+      d.instruction = RECOVERY_STRATEGIES.FREQUENT_LIMIT.instruction;
+      d.recovery = Object.assign({}, RECOVERY_STRATEGIES.FREQUENT_LIMIT);
+    } else if (/403|blocked|被拦截/i.test(rLower)) {
+      d.code = 'HTTP_BLOCKED';
+      d.level = 'blocked';
+      d.instruction = RECOVERY_STRATEGIES.HTTP_BLOCKED.instruction;
+      d.recovery = Object.assign({}, RECOVERY_STRATEGIES.HTTP_BLOCKED);
+    } else {
+      d.code = 'GENERIC_VERIFY';
+      d.instruction = RECOVERY_STRATEGIES.GENERIC_VERIFY.instruction;
+      d.recovery = Object.assign({}, RECOVERY_STRATEGIES.GENERIC_VERIFY);
+    }
+    return d;
+  }
+
+  // ── 恢复监控：轮询 webview 直到验证解除 ──
+  var _recoveryTimer = null;
+  var _recoveryTargetUrl = null;
+
+  function startRecoveryMonitor(t, detection) {
+    stopRecoveryMonitor();
+    if (!detection.recovery || detection.recovery.type === 'manual') {
+      showBatchNotify(detection);
+      return;
+    }
+    var recovery = detection.recovery;
+    _recoveryTargetUrl = t.url;
+    showBatchNotify(detection);
+    var startTime = Date.now();
+
+    function poll() {
+      if (Date.now() - startTime > recovery.timeout) {
+        stopRecoveryMonitor();
+        updateBatchNotify({ instruction: '验证超时 (已等待 ' + Math.round(recovery.timeout/1000) + 's)，请手动点击继续', timeout: true });
+        return;
+      }
+      var wv = document.getElementById('webview');
+      if (!wv) { _recoveryTimer = setTimeout(poll, recovery.pollInterval || 2000); return; }
+
+      switch (recovery.type) {
+        case 'poll_dom':
+          try {
+            var sel = (recovery.target || 'body').replace(/"/g, '\\"');
+            wv.executeJavaScript(
+              '(function(){var els=document.querySelectorAll("' + sel + '");' +
+              'if(els.length===0){var t=(document.body?document.body.innerText||"":"");' +
+              'return t.length>200?"ok:"+t.length:"short";}return "still";})()'
+            ).then(function(r) {
+              if (r && r.indexOf('ok:') === 0) handleRecovery(t);
+              else if (r === 'still') {
+                updateBatchNotify({ countdown: Math.ceil((recovery.timeout - (Date.now() - startTime)) / 1000) });
+              }
+            }).catch(function(){});
+          } catch(e) {}
+          break;
+
+        case 'poll_url':
+          var currentUrl = wv.getURL();
+          if (currentUrl && currentUrl !== 'about:blank') {
+            var curHost = currentUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+            var tgtHost = (_recoveryTargetUrl || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+            if (curHost === tgtHost && !/login|passport|captcha|verify/i.test(currentUrl)) {
+              handleRecovery(t);
+              return;
+            }
+          }
+          break;
+
+        case 'wait_fixed':
+          if (Date.now() - startTime >= recovery.waitMs) {
+            handleRecovery(t);
+            return;
+          }
+          updateBatchNotify({ countdown: Math.ceil((recovery.waitMs - (Date.now() - startTime)) / 1000) });
+          break;
+      }
+      _recoveryTimer = setTimeout(poll, recovery.pollInterval || 2000);
+    }
+    _recoveryTimer = setTimeout(poll, 1000);
+  }
+
+  function handleRecovery(t) {
+    stopRecoveryMonitor();
+    hideBatchNotify();
+    setStatus('✓ 验证通过，自动继续采集 [' + (t.q || t.url) + ']');
+    t.status = 'pending';
+    t._susCount = 0;
+    delete t._susCount;
+    S.batchLoadPaused = false;
+    document.getElementById('paginationFloat').classList.remove('hidden');
+    updateBatchFloat();
+    renderBatchTags();
+    batchLoadAll();
+  }
+
+  function stopRecoveryMonitor() {
+    if (_recoveryTimer) { clearTimeout(_recoveryTimer); _recoveryTimer = null; }
+    _recoveryTargetUrl = null;
+  }
+
+  // ── 浮动通知条（不阻塞 webview，底部居中）──
+  function showBatchNotify(detection) {
+    var banner = document.getElementById('batchNotifyBanner');
+    var level = detection.level || 'captcha';
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'batchNotifyBanner';
+      banner.className = 'batch-notify-banner';
+      banner.style.cssText = 'display:none';
+      banner.innerHTML = '<span class="bn-icon"></span><span class="bn-text"></span>' +
+        '<span class="bn-countdown"></span>' +
+        '<button class="bn-continue hidden">继续</button>';
+      document.body.appendChild(banner);
+      banner.querySelector('.bn-continue').addEventListener('click', function() {
+        hideBatchNotify();
+        stopRecoveryMonitor();
+        S.batchLoadPaused = false;
+        document.getElementById('paginationFloat').classList.remove('hidden');
+        updateBatchFloat();
+        setStatus('▶ 手动继续批量采集');
+        batchLoadAll();
+      });
+    }
+    // 颜色
+    var bg = level === 'blocked' ? 'var(--red)' :
+             level === 'redirected' ? 'var(--orange)' : 'var(--accent)';
+    banner.style.background = bg;
+    banner.style.display = 'flex';
+    banner.querySelector('.bn-icon').textContent =
+      level === 'blocked' ? '🚫' : level === 'redirected' ? '🔐' : '⚠️';
+    banner.querySelector('.bn-text').textContent =
+      (detection.reason || '') + '  →  ' + (detection.instruction || '');
+    banner.querySelector('.bn-countdown').textContent = '';
+    banner.querySelector('.bn-continue').classList.add('hidden');
+  }
+
+  function updateBatchNotify(info) {
+    var banner = document.getElementById('batchNotifyBanner');
+    if (!banner || banner.style.display === 'none') return;
+    if (info.instruction) banner.querySelector('.bn-text').textContent = info.instruction;
+    if (info.countdown !== undefined && info.countdown > 0)
+      banner.querySelector('.bn-countdown').textContent = info.countdown + 's';
+    if (info.timeout) banner.querySelector('.bn-continue').classList.remove('hidden');
+  }
+
+  function hideBatchNotify() {
+    var banner = document.getElementById('batchNotifyBanner');
+    if (banner) { banner.style.display = 'none'; }
+  }
+
 
   // 向后兼容：原 detectCaptcha 返回 boolean
   function detectCaptcha(html) {
