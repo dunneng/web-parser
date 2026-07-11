@@ -106,7 +106,7 @@
       }
     } catch (e) {}
 
-    // 6. navigator.languages 注入补充语言（后羿手法）
+    // 6. navigator.languages 注入补充语言
     //    检测脚本可能会检查 languages 数组是否包含中文等常见语言
     try {
       var _origLangs = navigator.languages;
@@ -120,7 +120,7 @@
       }
     } catch (e) {}
 
-    // 7. String.prototype.startsWith 防检测（后羿手法）
+    // 7. String.prototype.startsWith 防检测
     //    部分反爬脚本检查 startsWith 是否被篡改过
     //    保存原版，加载模块时临时切回
     try {
@@ -134,7 +134,7 @@
       }
     } catch (e) {}
 
-    // 8. JSON 隔离（后羿手法）
+    // 8. JSON 隔离
     //    从空白 iframe 获取纯净的 JSON.stringify/parse
     //    防止网站覆盖 JSON 方法来做指纹采集
     try {
@@ -868,14 +868,14 @@
   P.networkInterceptor.hook();
 
   // ═══════════════════════════════════════════
-  //  文字加密检测 & OCR 解密
+  //  文字识别 & OCR 识别
   // ═══════════════════════════════════════════
   (function () {
     var ipc = null;
     try { ipc = require('electron').ipcRenderer; } catch (e) {}
 
-    // 检测加密类型
-    function detectEncryption(el) {
+    // 检测文字编码类型
+    function detectOcr(el) {
       var clone = el.cloneNode(true);
       // 移除图标类小元素
       var icons = clone.querySelectorAll('i, [class*="icon"], [class*="emoji"]');
@@ -886,7 +886,7 @@
       }
       var text = (clone.textContent || '').trim();
 
-      // 生僻字检测（自定义字体映射）
+      // 特殊字符检测（字体差异对比）
       if (/[\u993c\u9fa4\u9ea3\u9f92\u9a4b\u958f\u9476\u9f64\u9e3a\u9fa5]/.test(text)) {
         var elFont = getComputedStyle(el).fontFamily;
         var parentFont = getComputedStyle(el.parentElement || el).fontFamily;
@@ -928,7 +928,7 @@
     }
 
     // 准备元素进行截图（放大+白底+固定定位）
-    function prepareDecrypt(el, style) {
+    function prepareOcr(el, style) {
       var origStyle = el.getAttribute('style') || '';
       el.setAttribute('data-orig-style', origStyle);
       el.setAttribute('style', style);
@@ -951,7 +951,7 @@
     }
 
     // 恢复元素样式
-    function completeDecrypt(el) {
+    function completeOcr(el) {
       var origStyle = el.getAttribute('data-orig-style');
       if (origStyle !== null) {
         el.setAttribute('style', origStyle);
@@ -973,19 +973,19 @@
       }
     }
 
-    // 获取加密元素的屏幕位置
-    function getRectForEncrypt() {
-      var el = document.querySelector('[data-parser-decrypt]');
+    // 获取 OCR 元素的屏幕位置
+    function getOcrRect() {
+      var el = document.querySelector('[data-parser-ocr]');
       if (!el) return null;
       var rect = el.getBoundingClientRect();
       return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
     }
 
     // OCR 回调
-    var _decryptCallback = null;
+    var _ocrCallback = null;
 
-    // 解密单个元素（递归处理子节点）
-    function decryptElement(el, encType) {
+    // 识别单个元素（递归处理子节点）
+    function ocrElement(el, encType) {
       return new Promise(function (resolve) {
         if (el.nodeType !== Node.ELEMENT_NODE) { resolve(''); return; }
 
@@ -1016,23 +1016,23 @@
               var charPromises = chars.map(function (ch) {
                 return new Promise(function (resolveChar) {
                   child.nodeValue = ch;
-                  prepareDecrypt(el,
+                  prepareOcr(el,
                     'position:fixed;left:50%;top:50%;font-size:80px!important;' +
                     'background:white!important;color:black!important;' +
                     'outline:30px solid white!important;z-index:99999;' +
                     'padding:5px;min-width:90px;min-height:90px;line-height:80px;text-align:center;');
-                  el.setAttribute('data-parser-decrypt', 'true');
+                  el.setAttribute('data-parser-ocr', 'true');
 
-                  _decryptCallback = function (result) {
-                    completeDecrypt(el);
-                    el.removeAttribute('data-parser-decrypt');
+                  _ocrCallback = function (result) {
+                    completeOcr(el);
+                    el.removeAttribute('data-parser-ocr');
                     resolveChar(result);
                   };
 
                   if (ipc) {
-                    ipc.sendToHost('element-decrypt-request');
+                    ipc.sendToHost('element-ocr-request');
                   } else {
-                    _decryptCallback('');
+                    _ocrCallback('');
                   }
                 });
               });
@@ -1060,7 +1060,7 @@
             }
           } else if (child.nodeType === Node.ELEMENT_NODE) {
             if (child.tagName !== 'STYLE' && child.tagName !== 'SCRIPT') {
-              promises.push(decryptElement(child, encType));
+              promises.push(ocrElement(child, encType));
             }
           }
         }
@@ -1068,19 +1068,19 @@
       });
     }
 
-    // 导出到 shenjian 命名空间（兼容后羿 API 格式）
-    var shenjian = window.shenjian || function () { return shenjian; };
-    shenjian.detectEncryption = detectEncryption;
-    shenjian.prepareDecrypt = prepareDecrypt;
-    shenjian.completeDecrypt = completeDecrypt;
-    shenjian.getRectForEncrypt = getRectForEncrypt;
-    shenjian.decryptElement = decryptElement;
-    shenjian.decryptCallback = function (text) {
-      if (_decryptCallback) { var cb = _decryptCallback; _decryptCallback = null; cb(text || ''); }
+    // 导出 OCR 模块到 wp 命名空间
+    var wp = window.wp || function () { return wp; };
+    wp.detectOcr = detectOcr;
+    wp.prepareOcr = prepareOcr;
+    wp.completeOcr = completeOcr;
+    wp.getOcrRect = getOcrRect;
+    wp.ocrElement = ocrElement;
+    wp.ocrCallback = function (text) {
+      if (_ocrCallback) { var cb = _ocrCallback; _ocrCallback = null; cb(text || ''); }
     };
-    window.shenjian = shenjian;
+    window.wp = wp;
 
-    console.log('[Parser] OCR 解密模块已加载');
+    console.log('[Parser] OCR 识别模块已加载');
   })();
 
   console.log('[Parser] webview-preload loaded');

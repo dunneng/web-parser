@@ -1158,15 +1158,15 @@ app.on('web-contents-created', (event, contents) => {
         mainWindow.webContents.send('webview:context-menu', params);
       }
     });
-    // OCR 解密：拦截 webview 的 IPC 消息
+    // OCR 识别：拦截 webview 的 IPC 消息
     contents.on('ipc-message', async (event, channel, ...args) => {
-      if (channel !== 'element-decrypt-request') return;
+      if (channel !== 'element-ocr-request') return;
       try {
         // 获取元素位置并截图
-        var rectScript = 'shenjian().getRectForEncrypt()';
+        var rectScript = 'wp().getOcrRect()';
         var rect = await contents.executeJavaScript(rectScript);
         if (!rect || !rect.width) {
-          contents.executeJavaScript("shenjian().decryptCallback('')");
+          contents.executeJavaScript("wp().ocrCallback('')");
           return;
         }
         var sf = contents.getOSProcessId() ? 1 : 1;
@@ -1197,13 +1197,13 @@ app.on('web-contents-created', (event, contents) => {
           req.end();
         });
         if (resp && resp.ok && resp.best) {
-          contents.executeJavaScript("shenjian().decryptCallback('" + resp.best.replace(/'/g, "\\'") + "')");
+          contents.executeJavaScript("wp().ocrCallback('" + resp.best.replace(/'/g, "\\'") + "')");
         } else {
-          contents.executeJavaScript("shenjian().decryptCallback('')");
+          contents.executeJavaScript("wp().ocrCallback('')");
         }
       } catch (e) {
-        console.error('[OCR] 解密失败:', e.message);
-        try { contents.executeJavaScript("shenjian().decryptCallback('')"); } catch (_) {}
+        console.error('[OCR] 识别失败:', e.message);
+        try { contents.executeJavaScript("wp().ocrCallback('')"); } catch (_) {}
       }
     });
   }

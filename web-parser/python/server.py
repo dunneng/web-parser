@@ -2095,7 +2095,7 @@ async def bg_demo_page():
 
 
 # ═══════════════════════════════════════════
-#  OCR 文字解密 API
+#  OCR 文字识别 API
 # ═══════════════════════════════════════════
 
 # 懒加载 easyocr（首次请求时才加载模型，避免启动慢）
@@ -2124,7 +2124,7 @@ class OcrDecodeRequest(BaseModel):
 
 @app.post("/api/ocr/decode")
 async def ocr_decode(req: OcrDecodeRequest):
-    """OCR 解密：接收 base64 图片，返回识别出的文本"""
+    """OCR 识别：接收 base64 图片，返回识别出的文本"""
     try:
         import base64, tempfile
         b64 = req.image_base64
