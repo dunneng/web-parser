@@ -934,23 +934,79 @@ def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[
             # next 方案：优先用自己指定的 link_cols[i]，兜底来源URL，再自动检测
             next_col = (link_cols[bi] if link_cols and bi < len(link_cols) and link_cols[bi] else (link_col if link_col in next_headers else ''))
             next_link = next_col if next_col else ('来源URL' if '来源URL' in next_headers else _find_link_col(next_headers))
-            if not step_link or not next_link:
-                # 无共同链接列 → 竖向拼接
+            # auto-fallback: if link col yields 0 matches, scan URL-value columns
+            def _is_url_val(v):
+                return isinstance(v, str) and (v.startswith('http://') or v.startswith('https://'))
+
+            def _try_match_count(step_lk, next_lk, base_rows, next_rows):
+                if not step_lk or not next_lk:
+                    return 0, {}
+                idx = {}
+                for nr in next_rows:
+                    k = nr.get(next_lk, "")
+                    if k:
+                        idx[k] = nr
+                if not idx:
+                    return 0, idx
+                count = sum(1 for br in base_rows if br.get(step_lk, "") in idx)
+                return count, idx
+
+            original_next_link = next_link
+            match_count, idx = _try_match_count(step_link, next_link, merged_rows, next_rows) if step_link and next_link else (0, {})
+            if match_count == 0 and step_link:
+                best_col = None
+                best_count = 0
+                best_idx = {}
+                for h in next_headers:
+                    if h == next_link:
+                        continue
+                    url_vals = [nr.get(h, "") for nr in next_rows[:5]]
+                    if not any(_is_url_val(v) for v in url_vals):
+                        continue
+                    mc, tidx = _try_match_count(step_link, h, merged_rows, next_rows)
+                    if mc > best_count:
+                        best_count = mc
+                        best_col = h
+                        best_idx = tidx
+                if best_col:
+                    next_link = best_col
+                    idx = best_idx
+                    match_count = best_count
+
+            if match_count == 0 and next_link:
+                best_col = None
+                best_count = 0
+                for h in prev_headers:
+                    if h == step_link:
+                        continue
+                    url_vals = [br.get(h, "") for br in merged_rows[:5]]
+                    if not any(_is_url_val(v) for v in url_vals):
+                        continue
+                    mc, _ = _try_match_count(h, next_link, merged_rows, next_rows)
+                    if mc > best_count:
+                        best_count = mc
+                        best_col = h
+                if best_col:
+                    step_link = best_col
+                    _, idx = _try_match_count(step_link, next_link, merged_rows, next_rows)
+                    match_count = best_count
+
+            if not step_link or not next_link or match_count == 0:
                 for r in next_rows:
                     row = {}
                     for h in all_headers:
                         row[h] = r.get(h, "")
                     merged_rows.append(row)
                 continue
-            idx = {}
-            for nr in next_rows:
-                k = nr.get(next_link, "")
-                if k:
-                    idx[k] = nr
-            # 同名列加序号避免覆盖（如"书名"→"书名_2"）
-            name_map = {}  # 原始列名 → 去重后的列名
+            if not idx:
+                idx = {}
+                for nr in next_rows:
+                    k = nr.get(next_link, "")
+                    if k:
+                        idx[k] = nr
+            name_map = {}
             for h in next_headers:
-                if h == next_link:
+                if h == original_next_link:
                     continue
                 target = h
                 n = 2
@@ -963,8 +1019,9 @@ def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[
                 key = br.get(step_link, "")
                 match = idx.get(key) if key else None
                 for h in next_headers:
-                    if h != next_link:
-                        br[name_map[h]] = match[h] if (match and h in match) else ""
+                    if h not in name_map:
+                        continue
+                    br[name_map[h]] = match[h] if (match and h in match) else ""
         return {"rows": _filter_empty(merged_rows, all_headers), "headers": all_headers, "totalRows": len(merged_rows)}
 
     # ── 垂直拼接（只有一个方案）──
