@@ -7851,11 +7851,12 @@ async function registerElements() {
       if (configRow) configRow.style.display = '';
       // 加载前先把当前编辑器的修改同步回来源方案
       var prevIdx = Parser.state._editingChainSchemeIdx;
-      if (prevIdx != null && prevIdx >= 0 && prevIdx < schemes.length && Parser.state.chainSegments && Parser.state.chainSegments.length) {
+      var targetIdx = schemes.indexOf(checked[0]);
+      if (prevIdx != null && prevIdx >= 0 && prevIdx < schemes.length && prevIdx !== targetIdx && Parser.state.chainSegments && Parser.state.chainSegments.length) {
         var syncSchema = buildChainSchema();
         schemes[prevIdx].schema = syncSchema;
       }
-      chainLoadScheme(schemes.indexOf(checked[0]));
+      chainLoadScheme(targetIdx);
       // 方案有链路数据才从库查（否则等实时提取）
       var scheme = checked[0].schema;
       if (scheme && scheme.chainSegments && scheme.chainSegments.length) {
@@ -8261,14 +8262,18 @@ async function registerElements() {
     var schemeChainSegs = (s.schema && s.schema.chainSegments && s.schema.chainSegments.length) ? s.schema.chainSegments : null;
     // 中断待决的 input 去抖，防止加载方案时覆盖用户刚输入的内容
     if (_chainInputTimer) { clearTimeout(_chainInputTimer); _chainInputTimer = null; }
-    // 方案有链路数据就用方案的，否则保留当前内存里的
+    // 方案有链路数据就用方案的，否则清空
     if (schemeChainSegs) {
       schemaChainInput.value = schemeDeepest;
       Parser.state.chainSegments = JSON.parse(JSON.stringify(schemeChainSegs));
-    } else if (Parser.state.chainSegments && Parser.state.chainSegments.length) {
-      // 保留当前链路：从最后一段还原选择器到文本框
+    } else if (Parser.state.chainSegments && Parser.state.chainSegments.length && !Parser.state._editingChainSchemeIdx) {
+      // 仅当没有活跃编辑方案时才保留当前链路（临时输入场景）
       var lastSeg = Parser.state.chainSegments[Parser.state.chainSegments.length - 1];
       schemaChainInput.value = (lastSeg && lastSeg.selector) || '';
+    } else {
+      // 加载的方案无链路数据 → 清空，不保留旧方案数据
+      schemaChainInput.value = schemeDeepest;
+      Parser.state.chainSegments = [];
     }
     // 注：else 分支删掉了，不再清空输入框——保留用户正在编辑的内容
     console.log('[chainLoadScheme] idx=' + idx + ' name=' + s.name + ' deepestSelector=' + ((s.schema && s.schema.deepestSelector) || '(空)') + ' fields=' + ((s.schema && s.schema.fields) ? s.schema.fields.length : 0));
@@ -9518,11 +9523,13 @@ async function registerElements() {
           handleCustomAttr(this, function(val) {
             ext.attr = val;
             autoRefreshChainPreview();
+            renderChainTree();
               });
         } else {
           this._prevValue = this.value;
           ext.attr = this.value;
           autoRefreshChainPreview();
+          renderChainTree();
           }
       });
     });
@@ -9533,6 +9540,7 @@ async function registerElements() {
         if (node && node.extractions && node.extractions[extrIdx]) {
           node.extractions[extrIdx].name = this.value.trim();
           autoRefreshChainPreview();
+          renderChainTree();
           }
       });
     });
@@ -9544,6 +9552,7 @@ async function registerElements() {
         if (!node.extractions) node.extractions = [];
         node.extractions.push({ attr: '', name: '' });
         renderChainEditor(path);
+        renderChainTree();
         autoRefreshChainPreview();
       });
     });
@@ -9554,6 +9563,7 @@ async function registerElements() {
         var node = getChainNode(path);
         if (node && node.extractions) node.extractions.splice(extrIdx, 1);
         renderChainEditor(path);
+        renderChainTree();
         autoRefreshChainPreview();
       });
     });
