@@ -94,6 +94,36 @@ app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
+# ── 鉴权中间件（ikSoft 模式）──
+# 启动时生成令牌，所有 API 调用需携带 X-Auth-Token
+import secrets as _secrets
+_AUTH_TOKEN = _secrets.token_hex(32)
+print(f"[Auth] 令牌: {_AUTH_TOKEN[:8]}...")
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import JSONResponse
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        # 跳过静态文件、健康检查和比价页面
+        path = request.url.path
+        if path.startswith('/static') or path in ('/api/health', '/price-compare', '/price-compare/'):
+            return await call_next(request)
+        if path.startswith('/price-compare') or path.startswith('/api/price-compare'):
+            return await call_next(request)
+
+        token = request.headers.get('X-Auth-Token', '')
+        if token != _AUTH_TOKEN:
+            return JSONResponse({'error': 'unauthorized'}, status_code=401)
+        return await call_next(request)
+
+app.add_middleware(AuthMiddleware)
+
+@app.get("/api/auth/token")
+async def get_token():
+    """前端获取当前鉴权令牌"""
+    return {"token": _AUTH_TOKEN}
+
 # ── 静态文件 ──
 from fastapi.staticfiles import StaticFiles
 IMAGES_DIR = os.path.join(os.path.dirname(__file__), "data", "images")

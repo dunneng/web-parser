@@ -1085,4 +1085,67 @@
 
   console.log('[Parser] webview-preload loaded');
 
+  // ═══════════════════════════════════════════════
+  // ikSoft 模式：DOM 注入 — 浮动采集工具栏
+  // ═══════════════════════════════════════════════
+  (function injectToolbar() {
+    // 避免重复注入
+    if (document.getElementById('__parser_iksoft_toolbar')) return;
+
+    var bar = document.createElement('div');
+    bar.id = '__parser_iksoft_toolbar';
+    bar.innerHTML = '\
+      <style>\
+        #__parser_iksoft_toolbar { position:fixed; bottom:20px; right:20px; z-index:2147483640;\
+          background:rgba(0,0,0,0.85); border-radius:12px; padding:8px 12px;\
+          display:flex; gap:8px; align-items:center; box-shadow:0 4px 20px rgba(0,0,0,0.4);\
+          font-family:Arial,sans-serif; font-size:13px; color:#fff; user-select:none; }\
+        #__parser_iksoft_toolbar button { border:none; border-radius:8px; padding:6px 14px;\
+          cursor:pointer; font-size:12px; font-weight:bold; color:#fff; }\
+        #__parser_iksoft_toolbar .tb-collect { background:#4ade80; color:#000; }\
+        #__parser_iksoft_toolbar .tb-skip { background:#f59e0b; }\
+        #__parser_iksoft_toolbar .tb-next { background:#3b82f6; }\
+        #__parser_iksoft_toolbar .tb-stop { background:#ef4444; }\
+        #__parser_iksoft_toolbar .tb-count { color:#aaa; font-size:11px; min-width:60px; text-align:center; }\
+      </style>\
+      <span class="tb-count">就绪</span>\
+      <button class="tb-collect" onclick="window.__parser_dispatch(\'collect\')">采集</button>\
+      <button class="tb-skip" onclick="window.__parser_dispatch(\'skip\')">跳过</button>\
+      <button class="tb-next" onclick="window.__parser_dispatch(\'next\')">下一个</button>\
+      <button class="tb-stop" onclick="window.__parser_dispatch(\'stop\')">停止</button>\
+    ';
+
+    // 拖拽功能
+    var dragStart = null;
+    bar.addEventListener('mousedown', function(e) {
+      if (e.target.tagName === 'BUTTON') return;
+      dragStart = { x: e.clientX - bar.offsetLeft, y: e.clientY - bar.offsetTop };
+      bar.style.cursor = 'grabbing';
+    });
+    document.addEventListener('mousemove', function(e) {
+      if (!dragStart) return;
+      bar.style.left = 'auto';
+      bar.style.right = (window.innerWidth - e.clientX + dragStart.x - bar.offsetWidth) + 'px';
+      bar.style.bottom = (window.innerHeight - e.clientY + dragStart.y) + 'px';
+    });
+    document.addEventListener('mouseup', function() {
+      dragStart = null;
+      bar.style.cursor = '';
+    });
+
+    // 事件分发
+    window.__parser_dispatch = function(action) {
+      window.dispatchEvent(new CustomEvent('parser:toolbar-action', { detail: { action: action } }));
+    };
+
+    document.body.appendChild(bar);
+
+    // 监听外部状态更新
+    window.__parser_updateToolbar = function(opts) {
+      var countEl = bar.querySelector('.tb-count');
+      if (countEl && opts.count !== undefined) countEl.textContent = opts.count + '/' + (opts.total || '?');
+      if (opts.status) countEl.textContent = opts.status;
+    };
+  })();
+
 })();

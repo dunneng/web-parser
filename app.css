@@ -1,0 +1,250 @@
+.btnB{
+    height: 20px;
+    background: #1694f3;
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    padding: 0 15px;
+    font-size: 14px;
+    margin-left: 10px;
+    cursor: pointer;
+    display: flex;
+    justify-items: center;
+    align-items: center;
+}
+.A{
+    cursor: pointer;
+    color: #4476df;
+    text-decoration: none;
+}
+.A:hover{
+    text-decoration: underline;
+}
+.btnE{
+    border: none;
+    background: #03A9F4;
+    color: #fff;
+    border-radius: 4px;
+    padding: 1px 3px;
+    margin: 2px 2px;
+    cursor: pointer;
+}
+.rowIndex {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    background: #e5e5e55c;
+    padding-left: 5px;
+    cursor: -webkit-grab;
+    border-radius: 4px;
+    border: 2px transparent dashed;
+}
+.rowIndex:hover{
+    border: 2px #000 dashed;
+}
+.btnD{
+    border-radius: 8px;
+    height: 28px;
+    padding: 0 10px 0 10px;
+    border: 1px solid #888;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    margin-right: 20px;
+}
+.state {
+    font-size: 14px;
+    font-weight: bold;
+    color: #2898e7;
+}
+
+
+/************************/
+.CCBox{
+    width: 800px;
+    margin: 30px auto;
+
+}
+.CCTitle{
+    margin-bottom: 5px;
+}
+.inputA{
+    height: 30px;
+    padding: 0 10px;
+    box-sizing: border-box;
+    font-size: 14px;
+    border-radius: 8px;
+    border: 1px solid #333;
+}
+.btnB2{
+    height: 20px;
+    background: #1694f3;
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    padding: 0 15px;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    justify-items: center;
+    align-items: center;
+}
+.A{
+    cursor: pointer;
+    color: #4476df;
+    text-decoration: none;
+}
+.A:hover{
+    text-decoration: underline;
+}
+.items{
+    height: 100%;
+    width: calc(50% - 65px);
+    border: 2px solid #999;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+.itemsTitle{
+    background: #cfcfcf;
+    height: 31px;
+    line-height: 30px;
+    text-align: center;
+    font-weight: bold;
+}
+.itemsBody {
+    position: absolute;
+    top: 31px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: auto;
+    overflow-x: hidden;
+    padding: 2px ;
+}
+.item{
+    margin: 3px 7px;
+    border: 1px solid #9f9f9f;
+    padding: 3px;
+    background: #eee;
+    user-select: none;
+}
+.numInput{
+    width: 40px;
+    height: 25px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    box-sizing: border-box;
+    text-align: center;
+    margin: 0 3px;
+}
+.inputBig{
+    height: 30px;
+    border-radius: 4px;
+    box-sizing: border-box;
+    border: 1px solid #888;
+    width: 100%;
+}
+.blockTitle {
+    padding: 2px 10px;
+    background: #ccc;
+}
+.block{
+    margin: 10px;
+    border-radius: 10px 10px 4px 4px;
+    border: 1px #ccc solid;
+    overflow: hidden;
+}
+
+
+/* Padding and font style */
+table {
+    border-bottom-width: 1px;
+    border-bottom-style: solid;
+    border-bottom-color: rgba(122, 122, 122, 0.22);
+    border-collapse: collapse;
+}
+table td, table th {
+    padding: 2px 8px;
+    font-size: 12px;
+    color: rgb(0 0 0);
+    border-spacing: 0;
+    margin: 0;
+    min-height: 30px;
+}
+#table thead{
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+#table tfoot{
+    position: sticky;
+    bottom: 40px;
+    z-index: 1000;
+}
+table th{
+    background: #1d8da9;
+    color: #fff;
+    text-align: left;
+}
+/* Alternating background colors */
+table tr:nth-child(even) td {
+    background: rgb(209 244 255);
+}
+table tr:nth-child(odd) td {
+    background: #FFF
+}
+tr:hover td{background: rgb(184 230 245)!important; }
+table .proUrl{
+    cursor: pointer;
+    padding: 4px;
+    height: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 310px;
+    white-space: nowrap;
+}
+table .proUrl:hover{
+    text-decoration: underline;
+}
+.checkboxLabel{
+    display: flex;
+    justify-items: center;
+    align-items: center;
+    border-radius: 4px;
+    height: 25px;
+    border: 1px solid #888;
+    cursor: pointer;
+    padding-right: 8px;
+}
+.proImg{
+    width: 50px; height: 50px;
+}
+.btn3{
+    height: 30px;
+    border-radius: 15px;
+    padding: 0 14px;
+}
+
+#scollToTop{
+    position: fixed;
+    bottom: 54px;
+    right: 7px;
+    z-index: 1000;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    padding: 5px 7px;
+    background: #fff;
+}
+.importTypeItem {
+    margin: 6px 5px;
+    border: 1px solid #d7d7d7;
+    padding: 10px;
+    border-radius: 10px;
+}
+button[disabled]{
+    background: #216fa9;
+    color: #bfbfbf;
+}

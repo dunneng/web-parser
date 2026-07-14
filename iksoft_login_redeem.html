@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>ikSoft 登录+兑换</title>
+<style>
+body{font-family:Arial;max-width:400px;margin:50px auto;padding:20px}
+input,button{width:100%;padding:12px;margin:8px 0;font-size:16px;box-sizing:border-box;border-radius:8px;border:1px solid #ccc}
+button{background:#009fe8;color:#fff;border:none;cursor:pointer;font-weight:bold}
+button:disabled{background:#999}
+.box{border:1px solid #ddd;border-radius:12px;padding:20px;margin:15px 0}
+.green{color:green}.red{color:red}
+#codeImg{cursor:pointer;display:block;margin:0 auto}
+</style></head><body>
+
+<h2>ikSoft 登录 + 兑换</h2>
+
+<div class="box" id="loginBox">
+    <h4>第1步：登录</h4>
+    <input id="username" placeholder="邮箱" value="1553431820@qq.com">
+    <input id="password" type="password" placeholder="密码" value="iloveyou1314">
+    <img id="codeImg" src="" onclick="refreshCaptcha()" style="cursor:pointer">
+    <input id="verifyCode" placeholder="验证码">
+    <button id="btnLogin" onclick="doLogin()">登录</button>
+    <div id="loginResult"></div>
+</div>
+
+<div class="box" id="redeemBox" style="display:none">
+    <h4>第2步：兑换</h4>
+    <p>兑换码: <b>zxeiwv6miz6apvp</b></p>
+    <button id="btnRedeem" onclick="doRedeem()">立即兑换</button>
+    <div id="redeemResult"></div>
+</div>
+
+<script>
+var redeemUrl = null;
+
+function refreshCaptcha(){
+    document.getElementById('codeImg').src = '/?s=@@checkCode/index&_=' + Date.now();
+}
+
+async function doLogin(){
+    var btn = document.getElementById('btnLogin');
+    btn.disabled = true;
+    btn.textContent = '登录中...';
+    
+    var formData = new URLSearchParams();
+    formData.append('username', document.getElementById('username').value);
+    formData.append('password', document.getElementById('password').value);
+    formData.append('verifyCode', document.getElementById('verifyCode').value);
+    formData.append('auto_login_auth_code', '');
+    
+    try {
+        var resp = await fetch('/?s=@@login/loginNew', {
+            method: 'POST',
+            body: formData,
+            credentials: 'include'
+        });
+        var data = await resp.json();
+        if(data.state == 1){
+            document.getElementById('loginResult').innerHTML = '<span class="green">✅ 登录成功!</span>';
+            document.getElementById('loginBox').style.display = 'none';
+            document.getElementById('redeemBox').style.display = 'block';
+        } else {
+            document.getElementById('loginResult').innerHTML = '<span class="red">❌ ' + data.info + '</span>';
+            refreshCaptcha();
+        }
+    } catch(e) {
+        document.getElementById('loginResult').innerHTML = '<span class="red">❌ 网络错误: ' + e.message + '</span>';
+    }
+    btn.disabled = false;
+    btn.textContent = '登录';
+}
+
+async function doRedeem(){
+    var resultDiv = document.getElementById('redeemResult');
+    var btn = document.getElementById('btnRedeem');
+    btn.disabled = true;
+    btn.textContent = '尝试中...';
+    resultDiv.innerHTML = '<b>正在扫描兑换端点...</b>';
+    
+    // Try ALL possible endpoints
+    var controllers = ['state','order','auth','login','reg','findPwd'];
+    var actions = ['submit','code','duihuang','activate','redeem','use','do','apply','exchange','send','add','save'];
+    var found = null;
+    
+    for(var c of controllers){
+        for(var a of actions){
+            var formData = new URLSearchParams();
+            formData.append('code', 'zxeiwv6miz6apvp');
+            try {
+                var resp = await fetch('/?s=@@'+c+'/'+a, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+                var text = await resp.text();
+                if(text.indexOf('class not exists')==-1 && text.indexOf('Call to undefined')==-1){
+                    try {
+                        var json = JSON.parse(text);
+                        if(json.state !== undefined || json.info !== undefined){
+                            resultDiv.innerHTML += '<div class="green">✅ @@'+c+'/'+a+': '+JSON.stringify(json)+'</div>';
+                            if(json.state == 1) found = '@@'+c+'/'+a;
+                        }
+                    } catch(e){
+                        // Not JSON
+                    }
+                }
+            } catch(e){}
+        }
+    }
+    
+    if(!found){
+        resultDiv.innerHTML += '<div class="red">所有端点都试过了，没找到兑换API</div>';
+        resultDiv.innerHTML += '<div>端点总数: ' + (controllers.length * actions.length) + '</div>';
+    }
+    btn.disabled = false;
+    btn.textContent = found ? '兑换成功!' : '重新扫描';
+}
+
+// Load captcha on page load
+refreshCaptcha();
+</script>
+</body></html>

@@ -108,6 +108,18 @@ contextBridge.exposeInMainWorld('api', {
   // Blocker — 资源拦截
   blockerSet: (level) => ipcRenderer.send('blocker:set', { level: level }),
 
+  // ── CDP 网络拦截（ikSoft 模式）──
+  cdpStart: (webContentsId) => ipcRenderer.invoke('cdp:start', webContentsId),
+  cdpStop: (webContentsId) => ipcRenderer.invoke('cdp:stop', webContentsId),
+  cdpGetBody: (webContentsId, requestId) => ipcRenderer.invoke('cdp:get-body', { webContentsId, requestId }),
+  onCdpResponse: (callback) => {
+    ipcRenderer.on('cdp:response', (_e, data) => callback(data));
+  },
+
+  // ── 鉴权令牌（ikSoft 模式）──
+  authGetToken: () => ipcRenderer.invoke('auth:get-token'),
+  authVerifyToken: (token) => ipcRenderer.invoke('auth:verify-token', token),
+
   // 应用退出前清理
   onCleanup: (callback) => ipcRenderer.on('app:cleanup', callback),
 });

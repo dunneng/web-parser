@@ -1124,6 +1124,96 @@ ipcMain.on('blocker:set', function (event, data) {
   applyBlocker();
 });
 
+// ──────── CDP 网络拦截（ikSoft 模式）────────
+const cdpSessions = new Map(); // webContentsId → debugger session
+
+ipcMain.handle('cdp:start', async (event, webContentsId) => {
+  try {
+    const wc = webContentsId
+      ? require('electron').webContents.fromId(webContentsId)
+      : event.sender;
+    if (!wc) return { ok: false, error: 'webContents not found' };
+    if (cdpSessions.has(wc.id)) return { ok: true, msg: 'already attached' };
+
+    wc.debugger.attach('1.3');
+    await wc.debugger.sendCommand('Network.enable');
+
+    // 监听网络事件
+    wc.debugger.on('message', (event, method, params) => {
+      if (method === 'Network.responseReceived') {
+        const { requestId, response } = params;
+        // 只记录 JSON/API 响应
+        const ct = (response.headers['content-type'] || '').toLowerCase();
+        if (ct.includes('json') || ct.includes('javascript')) {
+          cdpSessions.set(wc.id + ':' + requestId, { url: response.url, mimeType: response.mimeType });
+        }
+      }
+      if (method === 'Network.loadingFinished') {
+        const cache = cdpSessions.get(wc.id + ':' + params.requestId);
+        if (cache) {
+          wc.debugger.sendCommand('Network.getResponseBody', { requestId: params.requestId })
+            .then(body => {
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('cdp:response', {
+                  url: cache.url,
+                  body: body.body,
+                  base64Encoded: body.base64Encoded
+                });
+              }
+              cdpSessions.delete(wc.id + ':' + params.requestId);
+            })
+            .catch(() => {});
+        }
+      }
+    });
+
+    cdpSessions.set(wc.id, { attached: true });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+ipcMain.handle('cdp:stop', async (event, webContentsId) => {
+  const wc = webContentsId
+    ? require('electron').webContents.fromId(webContentsId)
+    : event.sender;
+  if (!wc) return { ok: false };
+  try {
+    wc.debugger.detach();
+  } catch (e) {}
+  cdpSessions.delete(wc.id);
+  return { ok: true };
+});
+
+ipcMain.handle('cdp:get-body', async (event, { webContentsId, requestId }) => {
+  const wc = require('electron').webContents.fromId(webContentsId);
+  if (!wc) return { ok: false, error: 'webContents not found' };
+  try {
+    const body = await wc.debugger.sendCommand('Network.getResponseBody', { requestId });
+    return { ok: true, body: body.body, base64Encoded: body.base64Encoded };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+// ──────── 鉴权令牌（ikSoft 模式）────────
+const crypto = require('crypto');
+let _authToken = null;
+
+ipcMain.handle('auth:get-token', async () => {
+  if (!_authToken) {
+    _authToken = crypto.randomBytes(32).toString('hex');
+    console.log('[Auth] 生成令牌:', _authToken.substring(0, 8) + '...');
+  }
+  return { token: _authToken };
+});
+
+ipcMain.handle('auth:verify-token', async (event, token) => {
+  if (!_authToken) return { valid: false };
+  return { valid: token === _authToken };
+});
+
 // ──────── 应用生命周期 ────────
 
 // 全局拦截：弹窗 + 右键菜单（包括 webview 内部）

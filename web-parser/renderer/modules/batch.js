@@ -14,6 +14,27 @@ window.Parser = window.Parser || {};
   // 批量抓取功能
   // ═══════════════════════════════════════════════
 
+  // ═══════════════════════════════════════════════
+  // 请求节流（ikSoft 模式：间隔 + 随机抖动 ±20%）
+  // ═══════════════════════════════════════════════
+
+  /** 获取节流间隔（ms），带 ±20% 随机抖动 */
+  function getJitteredInterval() {
+    var el = document.getElementById('batchInterval');
+    if (!el) return 500;
+    var base = parseInt(el.value) || 500;
+    if (base <= 0) return 0;
+    var jitter = base * 0.2;
+    var min = Math.max(100, base - jitter);
+    var max = base + jitter;
+    return Math.floor(min + Math.random() * (max - min));
+  }
+
+  /** 节流等待（带抖动），替代直接 sleep */
+  function jiangeSleep() {
+    return sleep(getJitteredInterval());
+  }
+
   var _batchEventsBound = false;
   function bindBatchEvents() {
     if (_batchEventsBound) return;
@@ -868,6 +889,58 @@ window.Parser = window.Parser || {};
     document.getElementById("pfCount").textContent = S.batchAllResults.length + '条';
   }
 
+
+  /** 独立窗口模式：打开 URL 到 BrowserWindow 并通过 CDP 采集 */
+  async function loadUrlInWindow(url) {
+    return new Promise(async function(resolve, reject) {
+      try {
+        // 通过 IPC 创建独立窗口
+        var winResult = await window.api.openPopupTab(url);
+        if (!winResult || !winResult.ok) {
+          // 降级到 webview
+          document.getElementById("webview").loadURL(url);
+          await new Promise(function(r) {
+            document.getElementById("webview").addEventListener('did-finish-load', function h() {
+              document.getElementById("webview").removeEventListener('did-finish-load', h);
+              setTimeout(r, 1000);
+            });
+          });
+          return resolve();
+        }
+        
+        // 给窗口足够时间加载
+        await sleep(5000);
+        resolve();
+      } catch(e) {
+        console.log('[batch] 独立窗口模式失败，降级到 webview:', e.message);
+        document.getElementById("webview").loadURL(url);
+        await sleep(3000);
+        resolve();
+      }
+    });
+  }
+
+  /** 根据模式加载 URL */
+  function loadTaskUrl(url) {
+    if (S.batchIndependentWindows && window.api && window.api.openPopupTab) {
+      return loadUrlInWindow(url);
+    }
+    // 默认：webview 加载
+    return new Promise(function(resolve) {
+      var loaded = false;
+      var timeout = setTimeout(function() { if (!loaded) resolve(); }, 15000);
+      function onLoad() {
+        if (loaded) return;
+        loaded = true;
+        clearTimeout(timeout);
+        document.getElementById("webview").removeEventListener('did-finish-load', onLoad);
+        setTimeout(resolve, 600);
+      }
+      document.getElementById("webview").addEventListener('did-finish-load', onLoad);
+      document.getElementById("webview").loadURL(url);
+    });
+  }
+
   async function batchLoadAll() {
     if (S.batchLoadRunning) { S.batchLoadCancel = true; return; }
     // 任务列表为空 → 从URL列表创建
@@ -1011,7 +1084,7 @@ window.Parser = window.Parser || {};
                 await sleep(extraWait);
               }
             } else {
-              await sleep(parseInt($('#batchInterval').value) || 500);
+              await jiangeSleep();
             }
 
             // ── stealth 重注入：SPA 异步渲染完成后强制再包装原型 ──
@@ -1114,7 +1187,7 @@ window.Parser = window.Parser || {};
           if (!isValidUrl(t.url)) { t.status = 'error'; t.error = '无效 URL: ' + t.url; break; }
           document.getElementById("webview").loadURL(t.url);
           await mnLoadPromise;
-          await sleep(parseInt($('#batchInterval').value) || 500);
+          await jiangeSleep();
 
           while (mnPage < mnMaxPages) {
             if (S.batchLoadCancel) break;
@@ -1212,7 +1285,7 @@ window.Parser = window.Parser || {};
         document.getElementById("webview").loadURL(t.url);
         await loadPromise;
         // 基础间隔
-        await sleep(parseInt($('#batchInterval').value) || 500);
+        await jiangeSleep();
         // 动态网页额外等待 JS 渲染
         var isDynamic = (document.querySelector('input[name="batchPageType"]:checked') || {}).value === 'dynamic';
         if (isDynamic) {

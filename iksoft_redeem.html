@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ikSoft 兑换工具</title>
+</head>
+<body>
+<h3>ikSoft 兑换码激活</h3>
+<p>兑换码: <b>zxeiwv6miz6apvp</b></p>
+<p>当前会话: <span id="status">检测中...</span></p>
+
+<button id="btnRedeem" style="font-size:18px;padding:10px 30px;">立即兑换</button>
+<div id="result" style="margin-top:20px;padding:10px;border:1px solid #ccc;display:none;"></div>
+
+<hr>
+<h4>手动尝试 (如果上面按钮无效)</h4>
+<p>打开浏览器 F12 → Network 面板，然后点击下面的链接逐个尝试：</p>
+<div id="manualLinks"></div>
+
+<script src="https://tool.iksoft.cn/lib/jquery+lodash.js.gz"></script>
+<script>
+$(function(){
+    // Check if we have session
+    $.get('/?s=@@state/heart', function(d){
+        if(d.state==1) $('#status').text('✅ 已登录').css('color','green');
+        else $('#status').text('❌ 未登录').css('color','red');
+    });
+
+    // All possible兑换 endpoints
+    var endpoints = [];
+    var controllers = ['state','order','auth','login','reg'];
+    var actions = ['submit','code','duihuang','activate','redeem','use','do','apply'];
+    controllers.forEach(function(c){
+        actions.forEach(function(a){
+            endpoints.push('@@'+c+'/'+a);
+        });
+    });
+
+    // Build manual links
+    endpoints.forEach(function(ep){
+        $('#manualLinks').append(
+            '<div><a href="#" class="tryLink" data-ep="'+ep+'">POST /?s='+ep+'</a> ' +
+            '<span class="epResult"></span></div>'
+        );
+    });
+
+    // Manual link click
+    $('.tryLink').click(function(e){
+        e.preventDefault();
+        var ep = $(this).data('ep');
+        var $span = $(this).next('.epResult');
+        $span.text(' 发送中...');
+        $.post('/?s='+ep, {code:'zxeiwv6miz6apvp'}, function(d){
+            $span.text(' → ' + JSON.stringify(d));
+            if(d.state) $span.css('color','green');
+        }).fail(function(xhr){
+            $span.text(' → HTTP ' + xhr.status).css('color','red');
+        });
+    });
+
+    // Main redeem button
+    $('#btnRedeem').click(function(){
+        var $btn = $(this);
+        $btn.prop('disabled', true).text('正在尝试所有端点...');
+        $('#result').show().html('<b>尝试中...</b>');
+        
+        var results = [];
+        var done = 0;
+        endpoints.forEach(function(ep){
+            $.post('/?s='+ep, {code:'zxeiwv6miz6apvp'}, function(d){
+                done++;
+                results.push({ep:ep, resp:d});
+                if(d.state || d.info){
+                    $('#result').append('<div style="color:green">✅ '+ep+': '+JSON.stringify(d)+'</div>');
+                }
+                if(done == endpoints.length){
+                    $btn.prop('disabled', false).text('立即兑换');
+                    if(results.every(r=>!r.resp.state)){
+                        $('#result').append('<div style="color:red">所有端点都试过了，没找到正确的兑换API</div>');
+                    }
+                }
+            }).fail(function(xhr){
+                done++;
+                if(done == endpoints.length){
+                    $btn.prop('disabled', false).text('立即兑换');
+                }
+            });
+        });
+    });
+});
+</script>
+</body>
+</html>
