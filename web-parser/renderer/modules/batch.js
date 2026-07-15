@@ -1009,7 +1009,7 @@ window.Parser = window.Parser || {};
       if (S.batchLoadCancel) break;
       var t = S.batchTasks[i];
       if (t.status === 'done') continue;
-      if (t.status === 'verify') {
+      if (t.status === 'verify' || t.status === 'blocked' || t.status === 'redirected') {
         S.batchLoadPaused = true;
         break;
       }
@@ -1375,7 +1375,7 @@ window.Parser = window.Parser || {};
               }
             }
             // ── 处理检测结果：自动修复 → 浮动通知 → 恢复监控 ──
-            if (detection) {
+            if (detection && !t._skipDetection) {
               t.status = 'verify'; t.error = detection.reason;
               // 尝试自动打码
               if (detection.level === 'captcha') {
@@ -1419,7 +1419,7 @@ window.Parser = window.Parser || {};
               }
             }
             // 可疑但非阻断 → 计数等待
-            if (detection && detection.level === 'suspicious') {
+            if (detection && detection.level === 'suspicious' && !t._skipDetection) {
               t._susCount = (t._susCount || 0) + 1;
               if (t._susCount >= 3) {
                 S.batchLoadPaused = true;
@@ -1441,7 +1441,9 @@ window.Parser = window.Parser || {};
             updateBatchFloat();
             continue;
           }
-          if (detection) { /* skip parse, handled above */ } else {
+          // 非 URL 列表模式 + 无检测 → 走到提取代码；URL 列表模式已在上方处理
+          if (isUrlListMode) {
+            // 兜底：URL 列表模式到此说明 detection 为 null，标记完成
             t.status = 'done';
             t.rowCount = 1;
             t.results = [{ '页面': t.url, '字符数': (S.currentHtml || '').length }];
@@ -1450,6 +1452,7 @@ window.Parser = window.Parser || {};
             updateBatchFloat();
             continue;
           }
+          // 有提取器 → 继续走到下方提取代码
           // 始终全量解析，存树数据到任务
           var respAll = await fetch('http://127.0.0.1:' + S.pythonPort + '/api/parse/all', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1482,6 +1485,7 @@ window.Parser = window.Parser || {};
           }
           t.rowCount = t.results.length;
           t.status = 'done';
+          t._skipDetection = false;  // 清除标记，下次运行时正常检测
           setStatus('[' + (i + 1) + '/' + S.batchTasks.length + '] 完成 → ' + t.rowCount + '条结果');
           updateBatchFloat();
           var tagged = t.results.map(function(r) {
@@ -1559,8 +1563,13 @@ window.Parser = window.Parser || {};
     }
     document.getElementById("paginationFloat").classList.remove('hidden');
     updateBatchFloat();
-    // 把 verify 的重新置为 pending
-    S.batchTasks.forEach(function(t) { if (t.status === 'verify') t.status = 'pending'; });
+    // 把 verify/blocked/redirected 重新置为 pending，标记跳过检测（用户已手动验证）
+    S.batchTasks.forEach(function(t) {
+      if (t.status === 'verify' || t.status === 'blocked' || t.status === 'redirected') {
+        t.status = 'pending';
+        t._skipDetection = true;  // 用户已手动验证，跳过本轮检测
+      }
+    });
     renderBatchTags();
     batchLoadAll();
   }
