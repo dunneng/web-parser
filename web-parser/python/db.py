@@ -839,6 +839,12 @@ def _sku_row_to_dict(r) -> dict:
 
 def save_chain_data(scheme_name: str, rows: list[dict], headers: list[str]) -> dict:
     """保存/覆盖某个方案的全部数据"""
+    # 归一化协议相对URL：//example.com → https://example.com
+    for row in rows:
+        for k, v in list(row.items()):
+            if isinstance(v, str) and v.startswith('//'):
+                row[k] = 'https:' + v
+
     now = _now_iso()
     data_json = json.dumps({"rows": rows, "headers": headers}, ensure_ascii=False)
     with get_db() as db:
@@ -905,6 +911,11 @@ def get_chain_data(scheme_names: list[str], link_col: str = "", link_cols: list[
             data = json.loads(row["data_json"])
             rows = data.get("rows", [])
             headers = data.get("headers", [])
+            # 归一化旧数据中的协议相对URL（// → https://）
+            for r in rows:
+                for k, v in list(r.items()):
+                    if isinstance(v, str) and v.startswith('//'):
+                        r[k] = 'https:' + v
             scheme_results.append((name, rows, headers))
 
     if not scheme_results:
