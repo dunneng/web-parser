@@ -211,6 +211,12 @@ def chain_extract(raw_html: str, chain_type: str, deepest_selector: str,
     headers = [f.get('name') or ('字段' + str(i + 1)) for i, f in enumerate(fields)]
     counts = [len(c) for c in columns]
 
+    # 归一化协议相对URL（// → https://）
+    for row in rows:
+        for k, v in list(row.items()):
+            if v and isinstance(v, str) and v.startswith('//'):
+                row[k] = 'https:' + v
+
     return {
         'rows': rows,
         'counts': counts,
