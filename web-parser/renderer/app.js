@@ -7279,6 +7279,18 @@ async function registerElements() {
 
     try {
       var result = await webview.executeJavaScript(jsCode);
+      // 归一化结果中的协议相对URL（// → https://）和无协议URL
+      if (result && result.rows) {
+        result.rows.forEach(function(row) {
+          Object.keys(row).forEach(function(k) {
+            var v = row[k];
+            if (typeof v === 'string' && v.length > 0) {
+              if (v.startsWith('//')) row[k] = 'https:' + v;
+              else if (v.startsWith('www.') && !/^https?:\/\//i.test(v)) row[k] = 'https://' + v;
+            }
+          });
+        });
+      }
       return result;
     } catch (e) {
       return { error: '执行提取失败: ' + e.message };
@@ -8180,6 +8192,15 @@ async function registerElements() {
       }
 
       var data = { rows: mergedRows, headers: allHeaders, totalRows: mergedRows.length };
+      // 归一化URL（// → https://）
+      data.rows.forEach(function(row) {
+        Object.keys(row).forEach(function(k) {
+          var v = row[k];
+          if (typeof v === 'string' && v.length > 0) {
+            if (v.startsWith('//')) row[k] = 'https:' + v;
+          }
+        });
+      });
           // 批量数据已由后端合并处理
       
 
@@ -8231,6 +8252,16 @@ async function registerElements() {
     }
 
     // 批量数据已由后端合并处理
+
+    // 归一化结果中的协议相对URL（// → https://）
+    if (data && data.rows) {
+      data.rows.forEach(function(row) {
+        Object.keys(row).forEach(function(k) {
+          var v = row[k];
+          if (typeof v === 'string' && v.length > 0 && v.startsWith('//')) row[k] = 'https:' + v;
+        });
+      });
+    }
 
     if (!data.rows || data.rows.length === 0) {
       previewWrap.innerHTML = '<div class="tree-empty">该方案暂无数据</div>';
