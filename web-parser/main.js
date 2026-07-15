@@ -1066,6 +1066,118 @@ ipcMain.handle('tab-browser:close', async () => {
   return { ok: true };
 });
 
+// ──────── ikSoft 独立采集窗口 + CDP ────────
+// 创建独立 BrowserWindow，挂载 CDP 拦截 API 响应，采集完成后自动关闭
+let _collectionWindows = {};  // webContentsId → { window, captured, resolve, timeout }
+
+ipcMain.handle('collection:open-window', async (event, { url, timeout: _timeout }) => {
+  return new Promise((resolve) => {
+    try {
+      const waitMs = _timeout || 15000;
+
+      // 使用隐身 session（Cookie 隔离，不被检测）
+      const ses = session.fromPartition('collection_' + Date.now(), { cache: false });
+
+      const win = new BrowserWindow({
+        width: 1200, height: 900,
+        show: false,  // 隐藏窗口，后台采集
+        webPreferences: {
+          session: ses,
+          nodeIntegration: false,
+          contextIsolation: true,
+        }
+      });
+
+      const wc = win.webContents;
+      const captured = [];
+
+      // 超时自动关闭
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve({ ok: true, captured, reason: 'timeout' });
+      }, waitMs);
+
+      function cleanup() {
+        clearTimeout(timer);
+        try {
+          if (wc.debugger.isAttached()) wc.debugger.detach();
+        } catch(e) {}
+        try { if (!win.isDestroyed()) win.close(); } catch(e) {}
+        delete _collectionWindows[wc.id];
+      }
+
+      // 页面加载完成 → 等待额外时间捕获异步请求后关闭
+      wc.on('did-finish-load', () => {
+        console.log('[Collection] 页面加载完成, 等待异步请求...');
+        // 等待额外时间让异步 API 调用完成
+        setTimeout(() => {
+          cleanup();
+          resolve({ ok: true, captured });
+        }, 3000);
+      });
+
+      wc.on('did-fail-load', (e, code, desc) => {
+        cleanup();
+        resolve({ ok: false, error: desc || 'load failed', code });
+      });
+
+      // 挂载 CDP，拦截 JSON API 响应
+      try {
+        wc.debugger.attach('1.3');
+        wc.debugger.sendCommand('Network.enable');
+
+        wc.debugger.on('message', (e, method, params) => {
+          if (method === 'Network.responseReceived') {
+            const resp = params.response;
+            const ct = (resp.headers && (resp.headers['content-type'] || resp.headers['Content-Type'])) || '';
+            if (ct.includes('json') || ct.includes('javascript')) {
+              _collectionWindows[wc.id] = _collectionWindows[wc.id] || {};
+              _collectionWindows[wc.id]['req_' + params.requestId] = {
+                url: resp.url,
+                mimeType: resp.mimeType,
+                requestId: params.requestId,
+              };
+            }
+          }
+          if (method === 'Network.loadingFinished') {
+            const info = _collectionWindows[wc.id] && _collectionWindows[wc.id]['req_' + params.requestId];
+            if (info) {
+              wc.debugger.sendCommand('Network.getResponseBody', { requestId: params.requestId })
+                .then((body) => {
+                  if (body && body.body) {
+                    try {
+                      const json = JSON.parse(body.body);
+                      captured.push({ url: info.url, data: json });
+                    } catch(e) {
+                      // 非 JSON 响应，跳过
+                    }
+                  }
+                }).catch(() => {});
+            }
+          }
+        });
+      } catch(e) {
+        console.log('[Collection] CDP 挂载失败:', e.message);
+      }
+
+      _collectionWindows[wc.id] = { window: win, captured, resolve, timer, cleanup };
+      win.loadURL(url);
+
+    } catch(e) {
+      resolve({ ok: false, error: e.message });
+    }
+  });
+});
+
+ipcMain.handle('collection:close-window', async (event, { webContentsId }) => {
+  const entry = _collectionWindows[webContentsId];
+  if (entry) {
+    entry.cleanup();
+    return { ok: true };
+  }
+  return { ok: false, error: 'not found' };
+});
+
 // ──────── 资源拦截器（加速模式）────────
 
 let _blockerLevel = 0;

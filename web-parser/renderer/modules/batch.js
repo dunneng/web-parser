@@ -890,39 +890,41 @@ window.Parser = window.Parser || {};
   }
 
 
-  /** 独立窗口模式：打开 URL 到 BrowserWindow 并通过 CDP 采集 */
+  /** 独立窗口模式：创建隐藏 BrowserWindow + CDP 拦截 JSON API 响应 */
   async function loadUrlInWindow(url) {
-    return new Promise(async function(resolve, reject) {
-      try {
-        // 通过 IPC 创建独立窗口
-        var winResult = await window.api.openPopupTab(url);
-        if (!winResult || !winResult.ok) {
-          // 降级到 webview
-          document.getElementById("webview").loadURL(url);
-          await new Promise(function(r) {
-            document.getElementById("webview").addEventListener('did-finish-load', function h() {
-              document.getElementById("webview").removeEventListener('did-finish-load', h);
-              setTimeout(r, 1000);
-            });
-          });
-          return resolve();
-        }
-        
-        // 给窗口足够时间加载
-        await sleep(5000);
-        resolve();
-      } catch(e) {
-        console.log('[batch] 独立窗口模式失败，降级到 webview:', e.message);
+    try {
+      console.log('[batch] 独立窗口开始采集:', url);
+      var result = await window.api.collectionOpen({ url: url, timeout: 20000 });
+      if (!result || !result.ok) {
+        console.log('[batch] 独立窗口失败，降级到 webview:', (result && result.error) || 'unknown');
         document.getElementById("webview").loadURL(url);
-        await sleep(3000);
-        resolve();
+        await new Promise(function(r) {
+          document.getElementById("webview").addEventListener('did-finish-load', function h() {
+            document.getElementById("webview").removeEventListener('did-finish-load', h);
+            setTimeout(r, 1000);
+          });
+        });
+        return;
       }
-    });
+      // 将 CDP 捕获的 JSON 数据存入采集结果
+      var captured = result.captured || [];
+      console.log('[batch] 独立窗口捕获 ' + captured.length + ' 个 JSON 响应');
+      if (captured.length > 0) {
+        S._capturedJsonData = S._capturedJsonData || [];
+        for (var ci = 0; ci < captured.length; ci++) {
+          S._capturedJsonData.push(captured[ci]);
+        }
+      }
+    } catch(e) {
+      console.log('[batch] 独立窗口异常，降级到 webview:', e.message);
+      document.getElementById("webview").loadURL(url);
+      await sleep(3000);
+    }
   }
 
-  /** 根据模式加载 URL */
+  /** 根据模式加载 URL（独立窗口优先，带 CDP API 拦截） */
   function loadTaskUrl(url) {
-    if (S.batchIndependentWindows && window.api && window.api.openPopupTab) {
+    if (S.batchIndependentWindows && window.api && window.api.collectionOpen) {
       return loadUrlInWindow(url);
     }
     // 默认：webview 加载
@@ -2176,6 +2178,39 @@ window.Parser = window.Parser || {};
     }
   }
 
+  // ikSoft 工具栏：加载下一个待处理任务
+  function loadNextTask() {
+    if (!S.batchTasks || S.batchTasks.length === 0) return;
+    if (S.batchCurrentTaskId) {
+      var cur = S.batchTasks.find(function(t) { return t.id === S.batchCurrentTaskId; });
+      if (cur && cur.status !== 'done') { cur.status = 'done'; renderBatchTags(); }
+    }
+    var next = S.batchTasks.find(function(t) { return t.status === 'pending'; });
+    if (next) {
+      S.batchCurrentTaskId = next.id;
+      next.status = 'loading';
+      renderBatchTags();
+      updateBatchFloat();
+      document.getElementById('webview').loadURL(next.url);
+      setStatus('→ ' + (next.q || next.url));
+    } else {
+      setStatus('没有更多待采集任务');
+    }
+  }
+
+  // ikSoft 工具栏：取消批量加载
+  function cancelBatchLoad() {
+    S.batchLoadCancel = true;
+    S.batchLoadRunning = false;
+    var btn = document.getElementById('btnBatchLoadAll');
+    if (btn) {
+      btn.textContent = '全部加载';
+      btn.style.background = 'var(--orange)';
+      btn.style.borderColor = 'var(--orange)';
+      btn.style.color = '#000';
+    }
+  }
+
 
 
   // Module API
@@ -2195,6 +2230,9 @@ window.Parser = window.Parser || {};
     detectPageFingerprint: detectPageFingerprint,
     smartClickNext: smartClickNext,
     sleep: sleep,
+    // ikSoft 工具栏接口
+    loadNext: loadNextTask,
+    cancelLoad: cancelBatchLoad,
     updateMergeExportBtn: updateMergeExportBtn,
   };
 })();

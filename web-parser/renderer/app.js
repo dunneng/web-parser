@@ -1087,6 +1087,28 @@ async function registerElements() {
         window.api.openPopupTab(e.url);
       }
     });
+    // ikSoft 工具栏事件：从 webview 内转发过来的采集/跳过/下一个/停止
+    webview.addEventListener('ipc-message', (e) => {
+      if (e.channel === 'parser:toolbar-action') {
+        var args = e.args[0] || {};
+        var action = args.action;
+        console.log('[webview toolbar]', action);
+        if (action === 'collect') {
+          // 触发当前页数据提取（复用解析流程）
+          try { document.getElementById('btnFetch').click(); } catch(ex) {}
+        } else if (action === 'skip' || action === 'next') {
+          // 跳过当前 → 加载下一个批量任务
+          if (typeof Parser !== 'undefined' && Parser.batch && Parser.batch.loadNext) {
+            Parser.batch.loadNext();
+          }
+        } else if (action === 'stop') {
+          // 停止批量加载
+          if (typeof Parser !== 'undefined' && Parser.batch && Parser.batch.cancelLoad) {
+            Parser.batch.cancelLoad();
+          }
+        }
+      }
+    });
 
     webview.addEventListener('did-finish-load', () => {
       const url = webview.getURL();

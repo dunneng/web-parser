@@ -120,6 +120,9 @@ contextBridge.exposeInMainWorld('api', {
   authGetToken: () => ipcRenderer.invoke('auth:get-token'),
   authVerifyToken: (token) => ipcRenderer.invoke('auth:verify-token', token),
 
+  // ── 独立采集窗口（ikSoft 模式）──
+  collectionOpen: (opts) => ipcRenderer.invoke('collection:open-window', opts),
+
   // 应用退出前清理
   onCleanup: (callback) => ipcRenderer.on('app:cleanup', callback),
 });

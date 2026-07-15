@@ -1092,6 +1092,10 @@
     // 避免重复注入
     if (document.getElementById('__parser_iksoft_toolbar')) return;
 
+    // 获取 IPC 通道（用于向宿主窗口转发事件）
+    var ipc = null;
+    try { ipc = require('electron').ipcRenderer; } catch (e) {}
+
     var bar = document.createElement('div');
     bar.id = '__parser_iksoft_toolbar';
     bar.innerHTML = '\
@@ -1133,8 +1137,13 @@
       bar.style.cursor = '';
     });
 
-    // 事件分发
+    // 事件分发（同时通知宿主窗口）
     window.__parser_dispatch = function(action) {
+      // 通过 IPC 转发给宿主（app.js 监听 ipc-message）
+      if (ipc) {
+        try { ipc.sendToHost('parser:toolbar-action', { action: action }); } catch(e) {}
+      }
+      // 同时派发本地事件（供页面内其他脚本监听）
       window.dispatchEvent(new CustomEvent('parser:toolbar-action', { detail: { action: action } }));
     };
 

@@ -63,7 +63,7 @@ window.Parser.state = {
   batchCurrentTaskId: null,
   batchCurrentMode: 'template',
   batchLocalFiles: [],
-  batchIndependentWindows: false, // ikSoft 模式：独立窗口采集
+  batchIndependentWindows: true, // ikSoft 模式：独立窗口采集（CDP 拦截 JSON API）
 
   // API 接入
   apiResponse: null,
