@@ -2128,24 +2128,7 @@ async def bg_demo_page():
 #  OCR 文字识别 API
 # ═══════════════════════════════════════════
 
-# 懒加载 easyocr（首次请求时才加载模型，避免启动慢）
-_ocr = None
-_ocr_lock = None
-
-def _get_ocr():
-    """懒加载 easyocr Reader（线程安全）"""
-    global _ocr, _ocr_lock
-    if _ocr_lock is None:
-        import threading
-        _ocr_lock = threading.Lock()
-    if _ocr is None:
-        with _ocr_lock:
-            if _ocr is None:
-                import easyocr
-                logging.warning("[OCR] 正在加载 easyocr 模型（首次约需 30s，后续秒级）...")
-                _ocr = easyocr.Reader(['ch_sim', 'en'], gpu=False)
-                logging.warning("[OCR] easyocr 模型加载完成")
-    return _ocr
+import ocr_util
 
 
 class OcrDecodeRequest(BaseModel):
@@ -2155,40 +2138,10 @@ class OcrDecodeRequest(BaseModel):
 @app.post("/api/ocr/decode")
 async def ocr_decode(req: OcrDecodeRequest):
     """OCR 识别：接收 base64 图片，返回识别出的文本"""
-    try:
-        import base64, tempfile
-        b64 = req.image_base64
-        if ',' in b64:
-            b64 = b64.split(',', 1)[1]
-        image_bytes = base64.b64decode(b64)
-
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
-            tmp.write(image_bytes)
-            temp_path = tmp.name
-
-        reader = _get_ocr()
-        results = reader.readtext(temp_path)
-
-        try:
-            os.remove(temp_path)
-        except Exception:
-            pass
-
-        if results:
-            best = max(results, key=lambda r: r[2])
-            text = best[1]
-            confidence = best[2]
-            all_text = ''.join(r[1] for r in results)
-            logging.warning(f"[OCR] 识别: '{all_text}' (置信度: {confidence:.2f})")
-            return {"ok": True, "text": all_text, "best": text, "confidence": confidence}
-        else:
-            return {"ok": True, "text": "", "best": "", "confidence": 0}
-
-    except ImportError:
-        return {"ok": False, "error": "easyocr 未安装，请运行: pip install easyocr"}
-    except Exception as e:
-        logging.warning(f"[OCR] 识别失败: {e}")
-        return {"ok": False, "error": str(e)}
+    result = ocr_util.decode_base64(req.image_base64)
+    if result.get("ok"):
+        return {"ok": True, "text": result.get("text", ""), "best": result.get("best", ""), "confidence": result.get("confidence", 0)}
+    return result
 
 
 # ═══════════════════════════════════════════

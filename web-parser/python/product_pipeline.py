@@ -12,6 +12,7 @@ from PIL import Image
 
 import db
 import vector_store
+import ocr_util
 try:
     import embedding
 except ImportError:
@@ -187,6 +188,22 @@ def ingest_product(
     if first_local_path:
         db.update_local_image(pid, first_local_path)
 
+    # 5. 图片 OCR 提取文字（用于比价文字搜索）
+    ocr_texts = []
+    for idx, img_url in enumerate(all_image_urls):
+        img_data = _download_image(img_url)
+        if img_data:
+            try:
+                ocr_result = ocr_util.decode_bytes(img_data)
+                if ocr_result.get("ok") and ocr_result.get("text"):
+                    ocr_texts.append(ocr_result["text"])
+            except Exception:
+                pass  # OCR 失败不影响入库流程
+    if ocr_texts:
+        aggregated = " ".join(ocr_texts)
+        db.update_ocr_text(pid, aggregated[:2000])  # 截断防止过长
+        logger.info(f"[pipeline] OCR 提取 {len(ocr_texts)} 段文字, product_id={pid}")
+
     elapsed = time.time() - start
     logger.info(f"[pipeline] 入库完成 product_id={pid} 图片={download_count}/{len(all_image_urls)} 向量={success_count} ({elapsed:.1f}s)")
     return pid
@@ -254,6 +271,7 @@ def search_by_image(image_data: bytes = None, image_path: str = None,
                     platform: str = None) -> list[dict]:
     """
     以图搜图：查询图自动去背景 → 向量化 → Qdrant 检索
+    + OCR 文字加权：识别查询图文字，匹配商品 OCR 文字，提升同款命中率
     返回格式: [{"id","platform","title","price","shop_name","score",...}, ...]
 
     支持多 SKU：商品主向量 + SKU 独立向量都参与检索，按 product_id 归组取最高分
@@ -261,6 +279,17 @@ def search_by_image(image_data: bytes = None, image_path: str = None,
     裁剪回退：如果去背景后的向量搜不到结果（裁剪图可能被 rembg 误删产品内容），
               自动换用原始图（不去背景）再搜一次。
     """
+    # 0. 查询图 OCR（提前做，用于后续加权）
+    query_ocr = ""
+    try:
+        if image_data:
+            ocr_result = ocr_util.decode_bytes(image_data)
+            if ocr_result.get("ok") and ocr_result.get("text"):
+                query_ocr = ocr_result["text"]
+                logger.info(f"[search_by_image] 查询图 OCR: '{query_ocr[:80]}'")
+    except Exception:
+        pass
+
     # 1. 查询图：去背景 → 向量化
     if image_data:
         vec = embedding.image_bytes_to_vector(image_data, skip_rembg=skip_rembg)
@@ -307,17 +336,40 @@ def search_by_image(image_data: bytes = None, image_path: str = None,
     for p in products.values():
         _resolve_matched_sku(p)
 
-    # 7. 组装结果
+    # 7. 组装结果 + OCR 文字加权
     results = []
     for h in sorted_hits:
         p = products.get(h["product_id"])
         if not p:
             continue
-        p["score"] = h["score"]
+        score = h["score"]
+        # OCR 文字匹配加权：提升同款命中率
+        if query_ocr and p.get("ocr_text"):
+            boost = _ocr_text_boost(query_ocr, p["ocr_text"])
+            if boost > 0:
+                score = min(1.0, score + boost)
+                logger.debug(f"[search_by_image] OCR boost +{boost:.2f} for pid={p['id']}")
+        p["score"] = score
         p["matched_image_index"] = h["image_index"]
         results.append(p)
 
+    # 按加权后的分数重新排序
+    results.sort(key=lambda x: x["score"], reverse=True)
     return results
+
+
+def _ocr_text_boost(query_text: str, product_text: str) -> float:
+    """计算 OCR 文字匹配加分（0~0.15）。匹配的词越多，加分越高。"""
+    if not query_text or not product_text:
+        return 0.0
+    # 简单词匹配：查询词在商品 OCR 中出现几个
+    query_words = set(query_text.lower().split())
+    product_words = set(product_text.lower().split())
+    if not query_words:
+        return 0.0
+    overlap = len(query_words & product_words)
+    ratio = overlap / len(query_words)
+    return round(ratio * 0.15, 2)
 
 
 def search_by_text(text: str, top_k: int = 20, min_score: float = 0.55,

@@ -132,6 +132,7 @@ def init_db():
                 stock_info    TEXT    DEFAULT '',         -- 库存/销量信息
                 shipping      TEXT    DEFAULT '',         -- 运费/物流
                 description   TEXT    DEFAULT '',         -- 商品详情介绍（文字）
+                ocr_text      TEXT    DEFAULT '',         -- 图片 OCR 提取的文字（比价搜索用）
                 image_urls    TEXT    DEFAULT '[]',       -- 所有图片 URL 列表 JSON
                 skus          TEXT    DEFAULT '[]',       -- SKU 列表 JSON: [{color,size,price,images:[idx]}]
                 status        TEXT    DEFAULT 'active',   -- active | deleted
@@ -181,6 +182,13 @@ def init_db():
         try:
             conn.execute("ALTER TABLE products ADD COLUMN description TEXT DEFAULT ''")
             logger.info("✓ 迁移: products 表已添加 description 列")
+        except sqlite3.OperationalError:
+            pass  # 列已存在
+
+        # 迁移：为旧数据库添加 ocr_text 列
+        try:
+            conn.execute("ALTER TABLE products ADD COLUMN ocr_text TEXT DEFAULT ''")
+            logger.info("✓ 迁移: products 表已添加 ocr_text 列")
         except sqlite3.OperationalError:
             pass  # 列已存在
 
@@ -555,12 +563,17 @@ def upsert_product(platform: str, platform_url: str, title: str = "",
 
 
 def update_local_image(product_id: int, local_image: str):
-    """只更新 local_image 字段，不覆盖其他数据"""
+    """更新商品主图本地路径"""
     with get_db() as db:
-        db.execute(
-            "UPDATE products SET local_image=?, updated_at=? WHERE id=?",
-            (local_image, _now_iso(), product_id)
-        )
+        db.execute("UPDATE products SET local_image=?, updated_at=? WHERE id=?",
+                   (local_image, _now_iso(), product_id))
+
+
+def update_ocr_text(product_id: int, ocr_text: str):
+    """更新商品图片 OCR 提取的文字（用于比价文字搜索）"""
+    with get_db() as db:
+        db.execute("UPDATE products SET ocr_text=?, updated_at=? WHERE id=?",
+                   (ocr_text, _now_iso(), product_id))
 
 
 def get_products_by_ids(product_ids: list[int]) -> list[dict]:
