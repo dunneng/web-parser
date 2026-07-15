@@ -114,7 +114,7 @@ window.Parser = window.Parser || {};
     }
     document.getElementById("btnBatchConfirm").addEventListener('click', function() {
       var raw = (document.getElementById('batchUrlList').value || '').trim();
-      var firstUrl = raw ? raw.split('\n')[0].trim() : '';
+      var firstUrl = raw ? normalizeUrl(raw.split('\n')[0].trim()) : '';
       if (!raw) { setStatus('URL列表为空'); return; }
       // 仅加载首链，不创建任务
       if (firstUrl) document.getElementById('webview').loadURL(firstUrl);
@@ -367,7 +367,7 @@ window.Parser = window.Parser || {};
     if (S.batchCurrentMode === 'localfiles') { renderLocalFilePreview(); return; }
     // 模板模式预览
     if (S.batchCurrentMode === 'template') {
-      var urlTemplate = $('#batchUrlTemplate').value.trim();
+      var urlTemplate = normalizeUrl($('#batchUrlTemplate').value.trim());
       var queriesRaw = $('#batchQueries').value.trim();
       var ps = parseInt($('#batchPageStart').value) || 1;
       var pe = parseInt($('#batchPageEnd').value) || 1;
@@ -423,7 +423,7 @@ window.Parser = window.Parser || {};
       var total = 0;
       var samples = [];
       for (var li = 0; li < lines.length && samples.length < 5; li++) {
-        var line = lines[li];
+        var line = normalizeUrl(lines[li]);
         if (/\{page\}/.test(line)) {
           total += Math.max(pe - ps + 1, 0);
           var pc = Math.max(pe - ps + 1, 0);
@@ -598,21 +598,22 @@ window.Parser = window.Parser || {};
       var ps = parseInt($('#batchUrlListPageStart').value) || 1;
       var pe = parseInt($('#batchUrlListPageEnd').value) || 1;
       lines.forEach(function(line) {
+        var normalizedLine = normalizeUrl(line);
         if (/\{page\}/.test(line)) {
           for (var p = ps; p <= pe; p++) {
-            newTasks.push({ url: line.replace(/\{page\}/g, p), q: line, page: p });
+            newTasks.push({ url: normalizedLine.replace(/\{page\}/g, p), q: line, page: p });
           }
         } else if (/[?&](?:page|pn|pageNum|pg|currentPage)=\d+/i.test(line) || /[?&]p=\d+(?=&|$)/i.test(line)) {
           // 硬编码了分页参数 → 自动展开
           for (var p = ps; p <= pe; p++) {
-            newTasks.push({ url: buildPageUrl(line, '', p), q: line, page: p });
+            newTasks.push({ url: buildPageUrl(normalizedLine, '', p), q: line, page: p });
           }
         } else {
-          newTasks.push({ url: line, q: line, page: '-' });
+          newTasks.push({ url: normalizedLine, q: line, page: '-' });
         }
       });
     } else {
-      var urlTemplate = $('#batchUrlTemplate').value.trim();
+      var urlTemplate = normalizeUrl($('#batchUrlTemplate').value.trim());
       var queriesRaw = $('#batchQueries').value.trim();
       var ps = parseInt($('#batchPageStart').value) || 1;
       var pe = parseInt($('#batchPageEnd').value) || 1;
@@ -2133,6 +2134,15 @@ window.Parser = window.Parser || {};
 
   function sleep(ms) {
     return new Promise(function(resolve) { setTimeout(resolve, ms); });
+  }
+
+  // URL 规范化：自动补齐 https:// 协议头
+  function normalizeUrl(u) {
+    if (!u || typeof u !== 'string') return u;
+    u = u.trim();
+    if (!u) return u;
+    if (/^https?:\/\//i.test(u) || u.startsWith('local-html://')) return u;
+    return 'https://' + u;
   }
 
   // 校验 URL 是否合法，防止非 URL 文本（如状态消息）被误传入 loadURL
