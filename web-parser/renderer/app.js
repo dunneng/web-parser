@@ -98,19 +98,16 @@ window._editorCollapseAll = function() {
     { id: 'canvas', label: 'Canvas 指纹加噪', desc: 'toDataURL/getImageData 加微量噪声', defaultOn: true },
     { id: 'webgl', label: 'WebGL 指纹统一', desc: '统一渲染器和供应商字符串', defaultOn: true },
     { id: 'webrtc', label: 'WebRTC 屏蔽', desc: '禁用 RTCPeerConnection，防内网 IP 泄漏', defaultOn: true },
-    { id: 'cdp', label: 'CDP 变量清理', desc: '清理 CDP 调试残留变量', defaultOn: true },
-    { id: 'navigator', label: 'Navigator 属性补全', desc: '统一 platform/vendor/deviceMemory 等', defaultOn: true },
     { id: 'audio', label: 'Audio 指纹加噪', desc: 'AudioContext 振荡器频率微调', defaultOn: true },
-    { id: 'font', label: '字体枚举限制', desc: '限制 measureText 精度 + 屏蔽 queryLocalFonts', defaultOn: true },
-    { id: 'permissions', label: 'Permissions 伪装', desc: 'permissions.query 返回一致结果', defaultOn: true },
-    { id: 'ua', label: 'UA 随机切换', desc: '每次加载随机切换 Chrome User-Agent', defaultOn: true, global: true },
+    { id: 'cdp', label: 'CDP 变量清理', desc: '清理 CDP 调试残留变量', defaultOn: true },
+    { id: 'browser', label: '浏览器指纹伪装', desc: '14项指纹统一(分辨率/时区/字体/权限等)', defaultOn: true, global: true },
     { id: 'autocookie', label: '自动加载 Cookie', desc: '匹配域名自动加载已保存的 Cookie', defaultOn: true, global: true },
   ];
-  var STEALTH_INJECT_IDS = ['canvas', 'webgl', 'webrtc', 'audio', 'font', 'cdp', 'navigator', 'permissions'];
-  // _stealthData 已迁移到 Parser.state._stealthData
+  var STEALTH_INJECT_IDS = ['canvas', 'webgl', 'webrtc', 'audio', 'cdp', 'browser'];
+  // browser 项控制 stealth-browser.js 的 CDP 注入（14项指纹伪装）
   // 同步到 Parser.state
   Parser.state.STEALTH_SCRIPTS = STEALTH_SCRIPTS;
-  Parser.state.STEALTH_INJECT_IDS = STEALTH_INJECT_IDS; // { defaultScripts: [...], domains: { 'taobao.com': [...] } }
+  Parser.state.STEALTH_INJECT_IDS = STEALTH_INJECT_IDS;
 
   // ──────── DOM 引用 ────────
   const $ = (s) => document.querySelector(s);

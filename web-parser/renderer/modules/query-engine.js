@@ -354,8 +354,8 @@ window.Parser = window.Parser || {};
     try {
       var wcid = document.getElementById("webview").getWebContentsId();
       if (!wcid) return;
-      // 注入全部 8 个包装脚本（CDP 脚本不依赖配置，始终生效）
-      var allScripts = S.STEALTH_INJECT_IDS.slice();
+      // 注入 CDP 包装脚本（排除 browser，它单独处理）
+      var allScripts = S.STEALTH_INJECT_IDS.filter(function(id) { return id !== 'browser'; });
       var code = buildStealthInjectCode(allScripts);
       if (code) {
         window.api.stealthInjectCdp(wcid, code).then(function(r) {
@@ -365,15 +365,20 @@ window.Parser = window.Parser || {};
           console.warn('[CDP] 预注入异常:', e.message);
         });
       }
-      // ikSoft 第三层：注入 stealth-browser.js（14 项浏览器指纹伪装）
-      var browserScript = window.__STEALTH_BROWSER_SCRIPT;
-      if (browserScript) {
-        window.api.stealthInjectCdp(wcid, browserScript).then(function(r) {
-          if (r && r.ok) console.log('[CDP] stealth-browser 指纹伪装注入成功');
-          else console.warn('[CDP] stealth-browser 注入失败:', r && r.error);
-        }).catch(function(e) {
-          console.warn('[CDP] stealth-browser 注入异常:', e.message);
-        });
+      // 浏览器指纹伪装（受 stealth 设置中 'browser' 开关控制）
+      var stealthScripts = Parser.stealth.getStealthScriptsForHost
+        ? Parser.stealth.getStealthScriptsForHost((document.getElementById("webview").src || '').replace(/^https?:\/\//, '').split('/')[0])
+        : S.STEALTH_INJECT_IDS;
+      if (stealthScripts.indexOf('browser') !== -1) {
+        var browserScript = window.__STEALTH_BROWSER_SCRIPT;
+        if (browserScript) {
+          window.api.stealthInjectCdp(wcid, browserScript).then(function(r) {
+            if (r && r.ok) console.log('[CDP] stealth-browser 指纹伪装注入成功');
+            else console.warn('[CDP] stealth-browser 注入失败:', r && r.error);
+          }).catch(function(e) {
+            console.warn('[CDP] stealth-browser 注入异常:', e.message);
+          });
+        }
       }
     } catch (e) {
       console.warn('[CDP] setupCdpStealthInjection 异常:', e.message);
