@@ -2142,6 +2142,8 @@ window.Parser = window.Parser || {};
     u = u.trim();
     if (!u) return u;
     if (/^https?:\/\//i.test(u) || u.startsWith('local-html://')) return u;
+    // 协议相对URL：//example.com/path → https://example.com/path
+    if (u.startsWith('//')) return 'https:' + u;
     return 'https://' + u;
   }
 
