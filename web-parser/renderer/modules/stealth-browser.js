@@ -1,0 +1,322 @@
+/**
+ * stealth-browser.js
+ * 网页解析器 — 浏览器指纹伪装模块（ikSoft 第三层防护）
+ *
+ * 通过 CDP Page.addScriptToEvaluateOnNewDocument 注入，
+ * 在目标页面任何脚本执行前覆盖所有可检测的浏览器指纹点。
+ *
+ * 覆盖清单（14 项）：
+ *   屏幕分辨率、时区、字体枚举、platform、maxTouchPoints、
+ *   deviceMemory、Permissions API、Battery API、Connection API、
+ *   Media Devices、iframe 检测、Performance memory、matchMedia、
+ *   Audio 指纹（通过 STEALTH_SCRIPTS 配置激活）
+ *
+ * 一致性配置：Windows 10 + Chrome 120 + 1920×1080 + 8核 + 8GB
+ */
+
+(function () {
+  'use strict';
+
+  // ════════════════════════════════════
+  //  配置：统一指纹画像（Windows 桌面 Chrome）
+  // ════════════════════════════════════
+  var PROFILE = {
+    platform: 'Win32',
+    screenWidth: 1920,
+    screenHeight: 1080,
+    availWidth: 1920,
+    availHeight: 1040,       // 减去任务栏
+    outerWidth: 1920,
+    outerHeight: 1080,
+    colorDepth: 24,
+    pixelDepth: 24,
+    devicePixelRatio: 1,
+    hardwareConcurrency: 8,
+    deviceMemory: 8,
+    maxTouchPoints: 0,
+    timezone: 'Asia/Shanghai',
+    vendor: 'Google Inc.',
+    vendorSub: '',
+    productSub: '20030107',
+    appVersion: '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  };
+
+  var _log = function (name) {
+    try { console.debug('[stealth-browser] ' + name + ': 已覆盖'); } catch (e) {}
+  };
+
+  // ════════════════════════════════════
+  //  1. 屏幕分辨率 / 窗口尺寸
+  // ════════════════════════════════════
+  try {
+    Object.defineProperty(screen, 'width', { get: function () { return PROFILE.screenWidth; }, configurable: true });
+    Object.defineProperty(screen, 'height', { get: function () { return PROFILE.screenHeight; }, configurable: true });
+    Object.defineProperty(screen, 'availWidth', { get: function () { return PROFILE.availWidth; }, configurable: true });
+    Object.defineProperty(screen, 'availHeight', { get: function () { return PROFILE.availHeight; }, configurable: true });
+    Object.defineProperty(screen, 'colorDepth', { get: function () { return PROFILE.colorDepth; }, configurable: true });
+    Object.defineProperty(screen, 'pixelDepth', { get: function () { return PROFILE.pixelDepth; }, configurable: true });
+    _log('screen');
+  } catch (e) {}
+
+  try {
+    Object.defineProperty(window, 'outerWidth', { get: function () { return PROFILE.outerWidth; }, configurable: true });
+    Object.defineProperty(window, 'outerHeight', { get: function () { return PROFILE.outerHeight; }, configurable: true });
+    Object.defineProperty(window, 'devicePixelRatio', { get: function () { return PROFILE.devicePixelRatio; }, configurable: true });
+    _log('window-size');
+  } catch (e) {}
+
+  // ════════════════════════════════════
+  //  2. 时区
+  // ════════════════════════════════════
+  try {
+    var _origDateTimeFormat = Intl.DateTimeFormat;
+    Intl.DateTimeFormat = function (locales, options) {
+      var inst = new _origDateTimeFormat(locales, options);
+      var _origResolved = inst.resolvedOptions;
+      inst.resolvedOptions = function () {
+        var opts = _origResolved.call(this);
+        opts.timeZone = PROFILE.timezone;
+        return opts;
+      };
+      return inst;
+    };
+    // 保留原型链
+    Intl.DateTimeFormat.prototype = _origDateTimeFormat.prototype;
+    Intl.DateTimeFormat.supportedLocalesOf = _origDateTimeFormat.supportedLocalesOf;
+    _log('timezone');
+  } catch (e) {}
+
+  // ════════════════════════════════════
+  //  3. 字体枚举防护
+  // ════════════════════════════════════
+  try {
+    // 拦截 queryLocalFonts（Chrome 103+）
+    if (window.queryLocalFonts) {
+      window.queryLocalFonts = function () {
+        return Promise.resolve([]);
+      };
+    }
+    // 拦截 FontFaceSet check（检测特定字体是否已安装）
+    if (document.fonts && document.fonts.check) {
+      var _origCheck = document.fonts.check;
+      document.fonts.check = function (font, text) {
+        // 始终返回 true 避免字体指纹
+        return true;
+      };
+    }
+    _log('font-enum');
+  } catch (e) {}
+
+  // ════════════════════════════════════
+  //  4. navigator.platform / vendor / appVersion
+  // ════════════════════════════════════
+  try {
+    Object.defineProperty(navigator, 'platform', {
+      get: function () { return PROFILE.platform; }, configurable: true
+    });
+    // vendor 保持一致
+    var _origVendor = Object.getOwnPropertyDescriptor(Navigator.prototype, 'vendor');
+    if (_origVendor && _origVendor.configurable !== false) {
+      Object.defineProperty(navigator, 'vendor', {
+        get: function () { return PROFILE.vendor; }, configurable: true
+      });
+    }
+    // productSub（Chromium 特有，部分检测脚本检查）
+    try {
+      Object.defineProperty(navigator, 'productSub', {
+        get: function () { return PROFILE.productSub; }, configurable: true
+      });
+    } catch (e) {}
+    _log('platform');
+  } catch (e) {}
+
+  // ════════════════════════════════════
+  //  5. maxTouchPoints
+  // ════════════════════════════════════
+  try {
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      get: function () { return PROFILE.maxTouchPoints; }, configurable: true
+    });
+    _log('touch');
+  } catch (e) {}
+
+  // ════════════════════════════════════
+  //  6. deviceMemory
+  // ════════════════════════════════════
+  try {
+    Object.defineProperty(navigator, 'deviceMemory', {
+      get: function () { return PROFILE.deviceMemory; }, configurable: true
+    });
+    _log('deviceMemory');
+  } catch (e) {}
+
+  // ════════════════════════════════════
+  //  7. Permissions API — 部分 prompt 更真实
+  // ════════════════════════════════════
+  try {
+    if (navigator.permissions && navigator.permissions.query) {
+      var _origPermQuery = navigator.permissions.query;
+      navigator.permissions.query = function (desc) {
+        // 对摄像头/麦克风返回 'prompt'（真人默认状态），而非 'denied'
+        if (desc && (desc.name === 'camera' || desc.name === 'microphone' || desc.name === 'geolocation')) {
+          return Promise.resolve({
+            state: (desc.name === 'geolocation' ? 'prompt' : 'prompt'),
+            onchange: null,
+            addEventListener: function () {},
+            removeEventListener: function () {},
+          });
+        }
+        return _origPermQuery.call(this, desc);
+      };
+      _log('permissions');
+    }
+  } catch (e) {}
+
+  // ════════════════════════════════════
+  //  8. Battery API — 返回充电中的台式机
+  // ════════════════════════════════════
+  try {
+    if (navigator.getBattery) {
+      navigator.getBattery = function () {
+        return Promise.resolve({
+          charging: true,
+          chargingTime: 0,
+          dischargingTime: Infinity,
+          level: 1,
+          onchargingchange: null,
+          onchargingtimechange: null,
+          ondischargingtimechange: null,
+          onlevelchange: null,
+          addEventListener: function () {},
+          removeEventListener: function () {},
+        });
+      };
+      _log('battery');
+    }
+  } catch (e) {}
+
+  // ════════════════════════════════════
+  //  9. Connection API — 模拟宽带
+  // ════════════════════════════════════
+  try {
+    if (navigator.connection) {
+      Object.defineProperty(navigator.connection, 'effectiveType', {
+        get: function () { return '4g'; }, configurable: true
+      });
+      Object.defineProperty(navigator.connection, 'downlink', {
+        get: function () { return 10; }, configurable: true
+      });
+      Object.defineProperty(navigator.connection, 'rtt', {
+        get: function () { return 50; }, configurable: true
+      });
+      _log('connection');
+    }
+    // 如果没有 connection API，不创建（部分检测脚本检查是否支持）
+  } catch (e) {}
+
+  // ════════════════════════════════════
+  //  10. Media Devices 枚举防护
+  // ════════════════════════════════════
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+      var _origEnumerate = navigator.mediaDevices.enumerateDevices;
+      var _fakeDevices = [
+        { deviceId: 'default', kind: 'audioinput', label: '', groupId: 'default' },
+        { deviceId: 'default', kind: 'audiooutput', label: '', groupId: 'default' },
+        { deviceId: 'default', kind: 'videoinput', label: '', groupId: 'default' },
+      ];
+      navigator.mediaDevices.enumerateDevices = function () {
+        return Promise.resolve(_fakeDevices.map(function (d) {
+          return Object.assign({}, d, { toJSON: function () { return this; } });
+        }));
+      };
+      _log('mediaDevices');
+    }
+  } catch (e) {}
+
+  // ════════════════════════════════════
+  //  11. iframe 检测 — 确保 self === top
+  // ════════════════════════════════════
+  try {
+    // frameElement 在顶层窗口应为 null
+    if (window.frameElement !== null) {
+      Object.defineProperty(window, 'frameElement', {
+        get: function () { return null; }, configurable: true
+      });
+    }
+    _log('iframe');
+  } catch (e) {}
+
+  // ════════════════════════════════════
+  //  12. Performance Memory
+  // ════════════════════════════════════
+  try {
+    if (performance.memory) {
+      Object.defineProperty(performance, 'memory', {
+        get: function () {
+          return {
+            totalJSHeapSize: 10000000,
+            usedJSHeapSize: 5000000,
+            jsHeapSizeLimit: 2190000000,
+          };
+        },
+        configurable: true,
+      });
+      _log('performance.memory');
+    }
+  } catch (e) {}
+
+  // ════════════════════════════════════
+  //  13. matchMedia 颜色偏好
+  // ════════════════════════════════════
+  try {
+    var _origMatchMedia = window.matchMedia;
+    window.matchMedia = function (query) {
+      var result = _origMatchMedia.call(window, query);
+      // 对 prefers-color-scheme / prefers-reduced-motion 返回标准桌面值
+      if (query.indexOf('prefers-color-scheme') !== -1) {
+        return {
+          matches: true,  // light mode（最常见）
+          media: query,
+          onchange: null,
+          addEventListener: function () {},
+          removeEventListener: function () {},
+          addListener: function () {},
+          removeListener: function () {},
+          dispatchEvent: function () { return true; },
+        };
+      }
+      if (query.indexOf('prefers-reduced-motion') !== -1) {
+        return {
+          matches: false,  // 不使用减少动画
+          media: query,
+          onchange: null,
+          addEventListener: function () {},
+          removeEventListener: function () {},
+          addListener: function () {},
+          removeListener: function () {},
+          dispatchEvent: function () { return true; },
+        };
+      }
+      return result;
+    };
+    _log('matchMedia');
+  } catch (e) {}
+
+  // ════════════════════════════════════
+  //  14. navigator 补充属性
+  // ════════════════════════════════════
+  try {
+    // appVersion 一致性（与 platform 匹配的 Chrome on Windows）
+    var _avDesc = Object.getOwnPropertyDescriptor(Navigator.prototype, 'appVersion');
+    if (!_avDesc || _avDesc.configurable !== false) {
+      Object.defineProperty(navigator, 'appVersion', {
+        get: function () { return PROFILE.appVersion; }, configurable: true
+      });
+    }
+    // userAgent 数据一致性 — 不覆盖但确保 platform 匹配
+    _log('navigator-extras');
+  } catch (e) {}
+
+  console.debug('[stealth-browser] 14 项指纹伪装已全部注入');
+})();

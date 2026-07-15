@@ -421,18 +421,58 @@ function setupApiUrlCapture() {
   }
 }
 
-// ──────── 请求头伪装（补全浏览器标准头）────────
+// ──────── ikSoft 网络层伪装：UA 轮换 + Referer 链 + 请求头补全 ────────
+
+// UA 池（真实 Chrome 120-126 on Windows，来自常见用户代理统计）
+const _UA_POOL = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+];
+let _sessionUA = '';
+
+function getSessionUA() {
+  if (!_sessionUA) {
+    _sessionUA = _UA_POOL[Math.floor(Math.random() * _UA_POOL.length)];
+    console.log('[网络伪装] UA: ' + _sessionUA.substring(0, 60) + '...');
+  }
+  return _sessionUA;
+}
+
+// 从 UA 提取 Chrome 版本号用于 Sec-CH-UA
+function getChromeVersion() {
+  const m = getSessionUA().match(/Chrome\/(\d+)\./);
+  return m ? parseInt(m[1]) : 124;
+}
+
+// 上一条请求的 URL，用于构造 Referer 链
+let _lastRequestUrl = null;
+let _lastRequestDomain = null;
 
 function setupRequestHeaders() {
   try {
+    const chromeVer = getChromeVersion();
+
     session.defaultSession.webRequest.onBeforeSendHeaders(
       { urls: ['*://*/*'] },
       (details, callback) => {
         const headers = details.requestHeaders;
+        const url = details.url;
+        let domain = '';
+        try { domain = new URL(url).hostname; } catch (e) {}
 
-        // Sec-CH-UA: 浏览器品牌标识（普通 Chrome 必带）
+        // ── User-Agent：每 session 固定，模拟真实浏览器 ──
+        if (!headers['User-Agent'] || headers['User-Agent'].indexOf('Electron') !== -1) {
+          headers['User-Agent'] = getSessionUA();
+        }
+
+        // ── Sec-CH-UA：与 UA 中的 Chrome 版本一致 ──
         if (!headers['Sec-CH-UA']) {
-          headers['Sec-CH-UA'] = '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"';
+          headers['Sec-CH-UA'] = '"Chromium";v="' + chromeVer + '", "Google Chrome";v="' + chromeVer + '", "Not-A.Brand";v="99"';
         }
         if (!headers['Sec-CH-UA-Platform']) {
           headers['Sec-CH-UA-Platform'] = '"Windows"';
@@ -441,24 +481,66 @@ function setupRequestHeaders() {
           headers['Sec-CH-UA-Mobile'] = '?0';
         }
 
-        // Accept-Language: 语言偏好
+        // ── Referer 链：同站页面自动带来源 ──
+        if (!headers['Referer'] && _lastRequestUrl && _lastRequestDomain && domain) {
+          // 同域名才带 referer（跨域不出 referer 是浏览器默认行为）
+          if (domain === _lastRequestDomain) {
+            headers['Referer'] = _lastRequestUrl;
+          }
+        }
+
+        // ── Accept 系列：标准浏览器头 ──
+        if (!headers['Accept']) {
+          headers['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8';
+        }
         if (!headers['Accept-Language']) {
           headers['Accept-Language'] = 'zh-CN,zh;q=0.9,en;q=0.8';
         }
+        if (!headers['Accept-Encoding']) {
+          headers['Accept-Encoding'] = 'gzip, deflate, br';
+        }
 
-        // Upgrade-Insecure-Requests: 普通浏览器默认行为
-        if (!headers['Upgrade-Insecure-Requests']) {
+        // ── 其他标准头 ──
+        if (!headers['Upgrade-Insecure-Requests'] && details.resourceType === 'mainFrame') {
           headers['Upgrade-Insecure-Requests'] = '1';
+        }
+        if (!headers['Cache-Control']) {
+          headers['Cache-Control'] = details.resourceType === 'mainFrame' ? 'max-age=0' : 'no-cache';
+        }
+
+        // 记录本次请求作为下次的 Referer
+        if (details.resourceType === 'mainFrame' || details.resourceType === 'subFrame') {
+          _lastRequestUrl = url;
+          _lastRequestDomain = domain;
         }
 
         callback({ requestHeaders: headers });
       }
     );
-    console.log('[请求头伪装] 已启动');
+    console.log('[网络伪装] UA轮换 + Referer链 + 请求头补全 已启动');
   } catch (e) {
-    console.error('[请求头伪装] 启动失败:', e.message);
+    console.error('[网络伪装] 启动失败:', e.message);
   }
 }
+
+// ═══════════════════════════════════════════════
+//  TLS 指纹 (JA3/JA4) — 已知限制
+// ═══════════════════════════════════════════════
+//
+// Chromium 的 TLS 握手特征（密码套件顺序、椭圆曲线、
+// 扩展列表等）在当前架构下无法伪装，因为 Electron 共用
+// 宿主 Chromium 的网络栈。
+//
+// 推荐方案（需要外部基础设施）：
+//   1. 前置 TLS 代理（mitmproxy / ghost-proxy）
+//   2. 代理层统一 JA3 指纹到 Chrome 120+
+//   3. 或使用 Cloudflare Workers 做反向代理
+//
+// 当前 mitigations（已实施）：
+//   - UA 轮换：降低 HTTP 层一致性检测
+//   - 代理配置：支持自定义 HTTP 代理
+//   - 独立 session：减少请求关联性
+// ───────────────────────────────────────────────
 
 // ──────── 窗口创建 ────────
 

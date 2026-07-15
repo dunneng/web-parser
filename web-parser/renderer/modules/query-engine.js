@@ -365,6 +365,16 @@ window.Parser = window.Parser || {};
           console.warn('[CDP] 预注入异常:', e.message);
         });
       }
+      // ikSoft 第三层：注入 stealth-browser.js（14 项浏览器指纹伪装）
+      var browserScript = window.__STEALTH_BROWSER_SCRIPT;
+      if (browserScript) {
+        window.api.stealthInjectCdp(wcid, browserScript).then(function(r) {
+          if (r && r.ok) console.log('[CDP] stealth-browser 指纹伪装注入成功');
+          else console.warn('[CDP] stealth-browser 注入失败:', r && r.error);
+        }).catch(function(e) {
+          console.warn('[CDP] stealth-browser 注入异常:', e.message);
+        });
+      }
     } catch (e) {
       console.warn('[CDP] setupCdpStealthInjection 异常:', e.message);
     }

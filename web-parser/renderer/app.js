@@ -100,10 +100,10 @@ window._editorCollapseAll = function() {
     { id: 'webrtc', label: 'WebRTC 屏蔽', desc: '禁用 RTCPeerConnection，防内网 IP 泄漏', defaultOn: true },
     { id: 'cdp', label: 'CDP 变量清理', desc: '清理 CDP 调试残留变量', defaultOn: true },
     { id: 'navigator', label: 'Navigator 属性补全', desc: '统一 platform/vendor/deviceMemory 等', defaultOn: true },
-    { id: 'audio', label: 'Audio 指纹加噪', desc: 'AudioContext 振荡器频率微调', defaultOn: false },
-    { id: 'font', label: '字体枚举限制', desc: '限制 measureText 精度 + 屏蔽 queryLocalFonts', defaultOn: false },
-    { id: 'permissions', label: 'Permissions 伪装', desc: 'permissions.query 返回一致结果', defaultOn: false },
-    { id: 'ua', label: 'UA 随机切换', desc: '每次加载随机切换 Chrome User-Agent', defaultOn: false, global: true },
+    { id: 'audio', label: 'Audio 指纹加噪', desc: 'AudioContext 振荡器频率微调', defaultOn: true },
+    { id: 'font', label: '字体枚举限制', desc: '限制 measureText 精度 + 屏蔽 queryLocalFonts', defaultOn: true },
+    { id: 'permissions', label: 'Permissions 伪装', desc: 'permissions.query 返回一致结果', defaultOn: true },
+    { id: 'ua', label: 'UA 随机切换', desc: '每次加载随机切换 Chrome User-Agent', defaultOn: true, global: true },
     { id: 'autocookie', label: '自动加载 Cookie', desc: '匹配域名自动加载已保存的 Cookie', defaultOn: true, global: true },
   ];
   var STEALTH_INJECT_IDS = ['canvas', 'webgl', 'webrtc', 'audio', 'font', 'cdp', 'navigator', 'permissions'];

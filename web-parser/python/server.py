@@ -2388,6 +2388,81 @@ async def verify_page(req: VerifyPageRequest):
     }
 
 
+# ═══════════════════════════════════════════
+#  数据反溯源 API（ikSoft 第三层防护）
+# ═══════════════════════════════════════════
+
+from stealth_data import (
+    generate_watermark, verify_watermark,
+    generate_honeypot_records, split_sensitive_data,
+)
+
+# 内存碎片存储（实际使用时可用 Redis 或文件存储）
+_fragment_store: dict[str, dict] = {}
+
+
+@app.get("/api/stealth/watermark")
+async def api_generate_watermark(user_id: str = "default"):
+    """生成内容水印"""
+    return {"ok": True, "watermark": generate_watermark(user_id)}
+
+
+@app.post("/api/stealth/watermark/verify")
+async def api_verify_watermark(request: Request):
+    """验证水印"""
+    body = await request.json()
+    wm = body.get("watermark", {})
+    return {"ok": True, "result": verify_watermark(wm)}
+
+
+@app.post("/api/stealth/honeypot")
+async def api_generate_honeypot(request: Request):
+    """生成蜜罐数据"""
+    body = await request.json()
+    count = body.get("count", 3)
+    template = body.get("template", None)
+    records = generate_honeypot_records(count, template)
+    return {"ok": True, "honeypot_records": records, "count": len(records)}
+
+
+@app.post("/api/stealth/split")
+async def api_split_data(request: Request):
+    """
+    数据分片：接收完整数据，返回主数据 + 碎片键。
+    敏感字段被分离到碎片中，需要额外请求获取。
+    """
+    body = await request.json()
+    data = body.get("data", [])
+    sensitive_fields = body.get("sensitive_fields", [])
+    result = split_sensitive_data(data, sensitive_fields)
+
+    # 存储碎片
+    for key, frag in result["fragments"].items():
+        _fragment_store[key] = frag
+        # 5分钟过期
+        import threading
+        def _clear(k=key):
+            _fragment_store.pop(k, None)
+        threading.Timer(300, _clear).start()
+
+    return {
+        "ok": True,
+        "main": result["main"],
+        "fragment_keys": result["fragment_keys"],
+        "sensitive_fields": result["sensitive_fields"],
+        "hint": "敏感字段已分离，通过 /api/stealth/fragment/{key} 获取碎片",
+    }
+
+
+@app.get("/api/stealth/fragment/{key}")
+async def api_get_fragment(key: str):
+    """获取数据碎片"""
+    frag = _fragment_store.get(key)
+    if frag is None:
+        return {"ok": False, "error": "碎片不存在或已过期"}
+    return {"ok": True, "fragment": frag}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=19527, log_level="warning")
