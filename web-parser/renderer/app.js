@@ -1343,6 +1343,9 @@ async function registerElements() {
         Parser.state.batchAllResults = [];
         Parser.state.batchTaskIdCounter = 0;
         selected.forEach(function(url) {
+          // 补齐协议头
+          if (url.startsWith('//')) url = 'https:' + url;
+          else if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
           Parser.state.batchTasks.push({ id: ++Parser.state.batchTaskIdCounter, url: url, q: '', page: '-', selector: '', selectorType: 'css', status: 'pending', rowCount: 0, error: null, results: null });
         });
         batchTagsPanel.classList.remove('hidden');
@@ -7716,7 +7719,11 @@ async function registerElements() {
       }
       var preview = Parser.state.schemaPreviewData;
       if (!preview || !preview.rows || preview.rows.length === 0) { setStatus('快速预览无数据，请先解析链路'); return; }
-      var urls = preview.rows.map(function(r) { return (r[linkCol] || '').trim(); }).filter(function(u) { return u && /^https?:\/\//.test(u); });
+      var urls = preview.rows.map(function(r) { return (r[linkCol] || '').trim(); }).filter(function(u) { return !!u; }).map(function(u) {
+        if (u.startsWith('//')) return 'https:' + u;
+        if (!/^https?:\/\//i.test(u)) return 'https://' + u;
+        return u;
+      });
       if (urls.length === 0) { setStatus('没有有效URL'); return; }
       var batchArea = document.getElementById('batchUrlList');
       if (batchArea) {
@@ -8028,7 +8035,10 @@ async function registerElements() {
 
       for (var ui = 0; ui < urls.length; ui++) {
         var url = urls[ui].trim();
-        if (!url || !/^https?:/.test(url)) continue;
+        if (!url) continue;
+        // 补齐协议头：// → https://，无协议 → https://
+        if (url.startsWith('//')) url = 'https:' + url;
+        else if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
 
         setStatus('详情页提取 ' + (ui + 1) + '/' + urls.length + '…');
         _debugLog('[详情提取] 加载 ' + url.substring(0, 60));
