@@ -953,7 +953,7 @@ window.Parser = window.Parser || {};
       var lines = raw.split(/[\n]+/).map(function(s) { return s.trim(); }).filter(Boolean);
       S.batchTasks = []; S.batchAllResults = []; S.batchTaskIdCounter = 0;
       lines.forEach(function(line) {
-        S.batchTasks.push({ id: ++S.batchTaskIdCounter, url: line, q: line, page: '-', status: 'pending', rowCount: 0 });
+        S.batchTasks.push({ id: ++S.batchTaskIdCounter, url: normalizeUrl(line), q: line, page: '-', status: 'pending', rowCount: 0 });
       });
       document.getElementById('batchTagsPanel').classList.remove('hidden');
       renderBatchTags();
