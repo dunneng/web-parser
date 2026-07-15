@@ -95,9 +95,9 @@ app.add_middleware(
 )
 
 # ── 鉴权中间件（ikSoft 模式）──
-# 启动时生成令牌，所有 API 调用需携带 X-Auth-Token
+# 优先使用 Electron 传入的令牌，否则启动时自动生成
 import secrets as _secrets
-_AUTH_TOKEN = _secrets.token_hex(32)
+_AUTH_TOKEN = os.environ.get('AUTH_TOKEN', '') or _secrets.token_hex(32)
 print(f"[Auth] 令牌: {_AUTH_TOKEN[:8]}...")
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -105,9 +105,9 @@ from fastapi.responses import JSONResponse
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
-        # 跳过静态文件、健康检查和比价页面
+        # 跳过静态文件、健康检查、比价页面和令牌获取
         path = request.url.path
-        if path.startswith('/static') or path in ('/api/health', '/price-compare', '/price-compare/'):
+        if path.startswith('/static') or path in ('/api/health', '/api/auth/token', '/price-compare', '/price-compare/'):
             return await call_next(request)
         if path.startswith('/price-compare') or path.startswith('/api/price-compare'):
             return await call_next(request)

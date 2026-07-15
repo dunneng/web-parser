@@ -28,6 +28,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const net = require('net');
+const crypto = require('crypto');
 
 // 移除 Chromium 自动化标记（确保浏览器环境正常）
 app.commandLine.appendSwitch('disable-features', 'AutomationControlled');
@@ -127,6 +128,12 @@ async function startPythonBackend() {
     return;
   }
 
+  // 生成鉴权令牌（Python 后端通过 AUTH_TOKEN 环境变量接收）
+  if (!_authToken) {
+    _authToken = crypto.randomBytes(32).toString('hex');
+    console.log('[Auth] 生成令牌:', _authToken.substring(0, 8) + '...');
+  }
+
   // 打包后 exe 在 resources/python/ 下，开发时在源码目录下
   // 优先目录版 (onedir)，其次单文件版
   const exeDirPath = app.isPackaged
@@ -150,13 +157,13 @@ async function startPythonBackend() {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: path.join(__dirname, 'python'),
       env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8', LANG: 'zh_CN.UTF-8',
-        VIRTUAL_ENV: '', PYTHONHOME: '' },
+        VIRTUAL_ENV: '', PYTHONHOME: '', AUTH_TOKEN: _authToken },
     });
   } else if (fs.existsSync(exePath)) {
     console.log('[Python] 使用打包的 python-backend.exe');
     pythonProcess = spawn(exePath, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env },
+      env: { ...process.env, AUTH_TOKEN: _authToken },
     });
   } else {
     // 无预打包后端，自动寻找 Python 并安装依赖
@@ -178,7 +185,8 @@ async function startPythonBackend() {
     pythonProcess = spawn(pythonCmd, [serverPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: path.join(__dirname, 'python'),
-      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8', LANG: 'zh_CN.UTF-8' },
+      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8', LANG: 'zh_CN.UTF-8',
+        AUTH_TOKEN: _authToken },
     });
   }
 
@@ -1198,7 +1206,6 @@ ipcMain.handle('cdp:get-body', async (event, { webContentsId, requestId }) => {
 });
 
 // ──────── 鉴权令牌（ikSoft 模式）────────
-const crypto = require('crypto');
 let _authToken = null;
 
 ipcMain.handle('auth:get-token', async () => {
@@ -1337,6 +1344,13 @@ app.whenReady().then(async () => {
 
   // 请求头伪装（补全浏览器标准头）
   setupRequestHeaders();
+
+  // 鉴权令牌自动注入：拦截所有到 Python 后端的请求，自动加上 X-Auth-Token
+  const pythonApiFilter = { urls: ['http://127.0.0.1:' + PYTHON_PORT + '/*'] };
+  session.defaultSession.webRequest.onBeforeSendHeaders(pythonApiFilter, (details, callback) => {
+    details.requestHeaders['X-Auth-Token'] = _authToken;
+    callback({ requestHeaders: details.requestHeaders });
+  });
 
   // 启动 Python 后端
   await startPythonBackend();
